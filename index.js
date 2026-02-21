@@ -1,4 +1,21 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // LOCAL DEV ONLY
+/**
+ * index.js — WhatsApp Cloud API Gym Bot (MVP + Admin Page)
+ * - Receives incoming messages via webhook
+ * - Replies with interactive menu buttons
+ * - Saves leads + trial bookings in MongoDB
+ * - Admin page to view latest trial bookings (Basic Auth)
+ *
+ * Required .env:
+ *   PORT=3000
+ *   VERIFY_TOKEN=your_verify_token
+ *   WHATSAPP_TOKEN=your_system_user_token
+ *   PHONE_NUMBER_ID=your_phone_number_id
+ *   MONGO_URI=mongodb://127.0.0.1:27017/gymbot   (or Atlas URI)
+ *   ADMIN_USER=admin
+ *   ADMIN_PASS=someStrongPassword
+ */
+
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // LOCAL DEV ONLY (remove in production)
 
 require("dotenv").config();
 const express = require("express");
@@ -14,11 +31,21 @@ const {
   WHATSAPP_TOKEN,
   PHONE_NUMBER_ID,
   MONGO_URI,
+  ADMIN_USER,
+  ADMIN_PASS,
 } = process.env;
 
-if (!PORT || !VERIFY_TOKEN || !WHATSAPP_TOKEN || !PHONE_NUMBER_ID || !MONGO_URI) {
+if (
+  !PORT ||
+  !VERIFY_TOKEN ||
+  !WHATSAPP_TOKEN ||
+  !PHONE_NUMBER_ID ||
+  !MONGO_URI ||
+  !ADMIN_USER ||
+  !ADMIN_PASS
+) {
   console.error(
-    "Missing required env vars. Ensure PORT, VERIFY_TOKEN, WHATSAPP_TOKEN, PHONE_NUMBER_ID, MONGO_URI are set in .env"
+    "Missing required env vars. Ensure PORT, VERIFY_TOKEN, WHATSAPP_TOKEN, PHONE_NUMBER_ID, MONGO_URI, ADMIN_USER, ADMIN_PASS are set in .env / Railway Variables"
   );
   process.exit(1);
 }
@@ -85,15 +112,23 @@ async function sendMenuButtons(to) {
         type: "button",
         body: {
           text:
-            "Assalam-o-Alaikum! Welcome to *Structure Health & Fitness Centre* 💪\n\n" +
-            "My name is Muhammad Naeem - Sakhat Banda against Pak Army Gernails \n\n" +
+            "Assalam-o-Alaikum! Welcome to *ABC Gym* 💪\n\n" +
             "Please choose an option:",
         },
         action: {
           buttons: [
-            { type: "reply", reply: { id: "pricing", title: "Membership Pricing" } },
-            { type: "reply", reply: { id: "trial", title: "Book Free Trial" } },
-            { type: "reply", reply: { id: "location", title: "Location & Timings" } },
+            {
+              type: "reply",
+              reply: { id: "pricing", title: "Membership Pricing" },
+            },
+            {
+              type: "reply",
+              reply: { id: "trial", title: "Book Free Trial" },
+            },
+            {
+              type: "reply",
+              reply: { id: "location", title: "Location & Timings" },
+            },
           ],
         },
       },
@@ -138,9 +173,92 @@ function trialPromptText() {
   );
 }
 
+// -------------------- Admin (Basic Auth) --------------------
+function requireBasicAuth(req, res, next) {
+  const header = req.headers.authorization || "";
+  const [type, token] = header.split(" ");
+
+  if (type !== "Basic" || !token) {
+    res.set("WWW-Authenticate", 'Basic realm="GymBot Admin"');
+    return res.status(401).send("Auth required");
+  }
+
+  const decoded = Buffer.from(token, "base64").toString("utf8");
+  const [user, pass] = decoded.split(":");
+
+  if (user === ADMIN_USER && pass === ADMIN_PASS) return next();
+
+  res.set("WWW-Authenticate", 'Basic realm="GymBot Admin"');
+  return res.status(401).send("Invalid credentials");
+}
+
+function escapeHtml(str = "") {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
 // -------------------- Routes --------------------
 app.get("/", (req, res) => res.send("OK - webhook server running"));
 
+/** Admin page: latest trial bookings */
+app.get("/admin/trials", requireBasicAuth, async (req, res) => {
+  const trials = await TrialBooking.find().sort({ createdAt: -1 }).limit(100).lean();
+
+  const rows =
+    trials.length > 0
+      ? trials
+          .map(
+            (t) => `
+      <tr>
+        <td>${t.createdAt ? new Date(t.createdAt).toISOString() : ""}</td>
+        <td>${escapeHtml(t.wa_id || "")}</td>
+        <td>${escapeHtml(t.details_text || "")}</td>
+        <td>${escapeHtml(t.status || "")}</td>
+      </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="4">No bookings yet</td></tr>`;
+
+  res.send(`
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Trial Bookings</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 16px; }
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+          th { background: #f4f4f4; text-align: left; }
+          code { background:#f6f6f6; padding:2px 4px; border-radius:4px; }
+        </style>
+      </head>
+      <body>
+        <h2>Latest Trial Bookings (Top ${trials.length})</h2>
+        <p>Endpoint: <code>/admin/trials</code></p>
+        <table>
+          <thead>
+            <tr>
+              <th>Created (UTC)</th>
+              <th>wa_id</th>
+              <th>Details</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+});
+
+/**
+ * Webhook verification (Meta calls this during setup)
+ * Callback URL: https://<public-domain>/webhook
+ */
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -152,6 +270,7 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
+/** Incoming messages webhook */
 app.post("/webhook", async (req, res) => {
   try {
     const value = req.body?.entry?.[0]?.changes?.[0]?.value;
@@ -184,7 +303,10 @@ app.post("/webhook", async (req, res) => {
       }
 
       if (buttonId === "trial") {
-        await Lead.updateOne({ wa_id: from }, { $set: { last_action: "trial_waiting_details" } });
+        await Lead.updateOne(
+          { wa_id: from },
+          { $set: { last_action: "trial_waiting_details" } }
+        );
         await sendText(from, trialPromptText());
         return res.sendStatus(200);
       }
@@ -209,7 +331,6 @@ app.post("/webhook", async (req, res) => {
     // If we are waiting for trial details, store booking
     if (lead.last_action === "trial_waiting_details") {
       await TrialBooking.create({ wa_id: from, details_text: text });
-
       await Lead.updateOne({ wa_id: from }, { $set: { last_action: "menu" } });
 
       await sendText(
@@ -236,6 +357,8 @@ connectMongo()
       console.log("Webhook endpoints:");
       console.log("  GET  /webhook   (verification)");
       console.log("  POST /webhook   (incoming messages)");
+      console.log("Admin endpoint:");
+      console.log("  GET  /admin/trials (Basic Auth)");
     });
   })
   .catch((e) => {
