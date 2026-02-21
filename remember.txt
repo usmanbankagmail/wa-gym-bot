@@ -1,0 +1,10 @@
+Start CloudFare Tunnel command:
+cloudflared tunnel --url http://localhost:3000
+
+
+WhatsApp API Console:
+https://developers.facebook.com/apps/1254033803337840/dashboard/?business_id=863856821228543
+
+
+last step:
+https://business.facebook.com/latest/settings/system_users?business_id=863856821228543&selected_user_id=61588643785037
