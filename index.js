@@ -112,7 +112,7 @@ async function sendMenuButtons(to) {
         type: "button",
         body: {
           text:
-            "Assalam-o-Alaikum! Welcome to *ABC Gym* 💪\n\n" +
+            "Assalam-o-Alaikum! Its real Ishaq .. Welcome to *Ishaq Gym* 💪\n\n" +
             "Please choose an option:",
         },
         action: {
