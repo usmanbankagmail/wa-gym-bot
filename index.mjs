@@ -14,11 +14,13 @@ import AdminUser from "./models/AdminUser.js";
 import { handleInbound } from "./services/flows.js";
 import { sendText } from "./services/whatsapp.js";
 
-import crypto from "crypto";
-
 dotenv.config();
 
 const app = express();
+
+// IMPORTANT for Railway/Reverse proxy so secure cookies & req.secure behave correctly
+app.set("trust proxy", 1);
+
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
@@ -29,6 +31,8 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 // Admin auth env
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || "dev_secret_change_me";
 const ADMIN_SETUP_KEY = process.env.ADMIN_SETUP_KEY || ""; // set in Railway to enable /admin/setup
+
+const isProd = process.env.NODE_ENV === "production";
 
 // --- Mongo ---
 mongoose
@@ -58,10 +62,153 @@ function requireAdmin(req, res, next) {
   }
 }
 
+function cookieOptions() {
+  // In prod (Railway HTTPS) => secure cookie required.
+  // In local dev (http://localhost) => secure must be false or cookie won't set.
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProd,
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  };
+}
+
 // --- Health ---
 app.get("/", (req, res) => res.send("OK"));
 
-// --- Webhook Verify (GET) ---
+// -------------------------
+// Admin UI (minimal, no build step)
+// -------------------------
+
+app.get("/admin", (req, res) => {
+  res.type("html").send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gym Admin Login</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;max-width:520px;margin:48px auto;padding:0 16px;}
+    .card{border:1px solid #ddd;border-radius:12px;padding:18px;}
+    label{display:block;margin:10px 0 6px;}
+    input{width:100%;padding:10px;border:1px solid #ccc;border-radius:10px;}
+    button{margin-top:14px;padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
+    .row{display:flex;gap:10px}
+    .row > div{flex:1}
+    .err{color:#b00020;margin-top:10px;white-space:pre-wrap}
+    .ok{color:#0b6b0b;margin-top:10px;white-space:pre-wrap}
+    code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <h2>Admin Login</h2>
+  <div class="card">
+    <form id="f">
+      <label>Email</label>
+      <input id="email" type="email" autocomplete="username" required />
+      <label>Password</label>
+      <input id="password" type="password" autocomplete="current-password" required />
+      <button type="submit">Login</button>
+    </form>
+    <div id="msg" class=""></div>
+    <p style="margin-top:12px;color:#555">
+      After login you should be redirected to <code>/admin/app</code>.
+    </p>
+  </div>
+
+<script>
+const msg = document.getElementById("msg");
+function setMsg(text, cls){ msg.className = cls; msg.textContent = text; }
+
+document.getElementById("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMsg("", "");
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+
+  const r = await fetch("/admin/auth/login", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({email, password})
+  });
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.ok) {
+    setMsg(data.error || ("Login failed ("+r.status+")"), "err");
+    return;
+  }
+
+  // Cookie is set by server. Now go to app.
+  window.location.href = "/admin/app";
+});
+</script>
+</body>
+</html>`);
+});
+
+app.get("/admin/app", (req, res) => {
+  res.type("html").send(`<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gym Admin</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;max-width:920px;margin:36px auto;padding:0 16px;}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .card{border:1px solid #ddd;border-radius:12px;padding:16px;margin-top:16px;}
+    button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
+    pre{background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto}
+    a{color:#0b57d0;text-decoration:none}
+    a:hover{text-decoration:underline}
+    .links a{margin-right:14px}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h2>Admin Dashboard (MVP)</h2>
+    <button id="logout">Logout</button>
+  </div>
+
+  <div class="card">
+    <div class="links">
+      <a href="/admin/trials" target="_blank">/admin/trials</a>
+      <a href="/admin/contacts" target="_blank">/admin/contacts</a>
+      <a href="/admin/inbox" target="_blank">/admin/inbox</a>
+      <a href="/admin/me" target="_blank">/admin/me</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Session check</h3>
+    <div id="status">Loading...</div>
+    <pre id="out"></pre>
+  </div>
+
+<script>
+async function loadMe(){
+  const r = await fetch("/admin/me");
+  const data = await r.json().catch(()=>({}));
+  document.getElementById("out").textContent = JSON.stringify(data, null, 2);
+  document.getElementById("status").textContent =
+    (r.ok && data.ok) ? ("Logged in as: " + data.admin.email + " (" + data.admin.role + ")")
+                      : ("NOT logged in ("+r.status+"): " + (data.error || ""));
+}
+
+document.getElementById("logout").addEventListener("click", async ()=>{
+  await fetch("/admin/auth/logout", { method:"POST" });
+  window.location.href = "/admin";
+});
+
+loadMe();
+</script>
+</body>
+</html>`);
+});
+
+// -------------------------
+// Webhook Verify (GET)
+// -------------------------
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -74,14 +221,15 @@ app.get("/webhook", (req, res) => {
   return res.sendStatus(403);
 });
 
-// --- Webhook Receive (POST) ---
+// -------------------------
+// Webhook Receive (POST)
+// -------------------------
 app.post("/webhook", async (req, res) => {
   // Ack fast
   res.sendStatus(200);
 
   try {
     const body = req.body;
-
     if (body.object !== "whatsapp_business_account") return;
 
     const entry = body.entry?.[0];
@@ -103,7 +251,6 @@ app.post("/webhook", async (req, res) => {
         ? { list_reply: msg.interactive.list_reply }
         : null;
 
-    // Update conversation "inbox" metadata early (even if flows changes)
     const preview =
       text?.slice(0, 120) ||
       (interactive?.button_reply?.title?.slice(0, 120)) ||
@@ -155,7 +302,8 @@ app.post("/admin/setup", async (req, res) => {
       name: name || "Admin",
       email: email.toLowerCase(),
       passwordHash,
-      role: "manager"
+      role: "manager",
+      active: true
     });
 
     return res.json({ ok: true, admin: { id: admin._id, email: admin.email, role: admin.role } });
@@ -178,21 +326,20 @@ app.post("/admin/auth/login", async (req, res) => {
     if (!ok) return res.status(401).json({ ok: false, error: "Invalid credentials" });
 
     const token = signAdminToken(admin);
-    res.cookie("admin_token", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: true, // Railway is HTTPS
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    res.cookie("admin_token", token, cookieOptions());
 
-    return res.json({ ok: true, admin: { id: admin._id, email: admin.email, role: admin.role, name: admin.name } });
+    return res.json({
+      ok: true,
+      admin: { id: admin._id, email: admin.email, role: admin.role, name: admin.name }
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
 });
 
 app.post("/admin/auth/logout", (req, res) => {
-  res.clearCookie("admin_token");
+  // clear with same options footprint
+  res.clearCookie("admin_token", { httpOnly: true, sameSite: "lax", secure: isProd });
   res.json({ ok: true });
 });
 
@@ -206,7 +353,6 @@ app.get("/admin/me", requireAdmin, async (req, res) => {
 // Admin Inbox + Handoff APIs
 // -------------------------
 
-// List handoff conversations
 app.get("/admin/inbox", requireAdmin, async (req, res) => {
   const status = req.query.status; // open|assigned|closed
   const q = { handoffMode: true };
@@ -221,11 +367,9 @@ app.get("/admin/inbox", requireAdmin, async (req, res) => {
   res.json({ ok: true, convos });
 });
 
-// Take/assign a chat (anti-collision)
 app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
-  // Only assign if unassigned OR already assigned to me
   const updated = await Conversation.findOneAndUpdate(
     {
       waId,
@@ -249,14 +393,12 @@ app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => 
   res.json({ ok: true, convo: updated });
 });
 
-// Release a chat
 app.post("/admin/conversations/:waId/unassign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
   const convo = await Conversation.findOne({ waId, handoffMode: true });
   if (!convo) return res.status(404).json({ ok: false, error: "Not found" });
 
-  // Only assignee or manager can unassign
   const isAssignee = convo.assignedTo?.toString() === req.admin.id;
   const isManager = req.admin.role === "manager";
   if (!isAssignee && !isManager) {
@@ -271,7 +413,6 @@ app.post("/admin/conversations/:waId/unassign", requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
-// Close chat (end handoff)
 app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
@@ -294,14 +435,12 @@ app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Get messages
 app.get("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
   const logs = await MessageLog.find({ waId }).sort({ createdAt: 1 }).limit(500).lean();
   res.json({ ok: true, logs });
 });
 
-// Send message as admin (WhatsApp + DB)
 app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
   const { text } = req.body || {};
@@ -319,22 +458,18 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
   const isAssignee = convo.assignedTo?.toString() === req.admin.id;
   const isManager = req.admin.role === "manager";
 
-  // If assigned to someone else, block typing (anti-collision)
   if (convo.assignedTo && !isAssignee && !isManager) {
     return res.status(409).json({ ok: false, error: "Chat assigned to another admin" });
   }
 
-  // If unassigned, auto-assign to sender
   if (!convo.assignedTo) {
     convo.assignedTo = new mongoose.Types.ObjectId(req.admin.id);
     convo.assignedAt = new Date();
     convo.status = "assigned";
   }
 
-  // Send WhatsApp
   const waRes = await sendText(waId, text.trim());
 
-  // Save message log
   await MessageLog.create({
     waId,
     direction: "out",
@@ -350,10 +485,6 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
-// -------------------------
-// Existing simple admin endpoints (keep)
-/// -------------------------
-
 app.get("/admin/trials", requireAdmin, async (req, res) => {
   const trials = await Trial.find({}).sort({ createdAt: -1 }).limit(200).lean();
   res.json(trials);
@@ -363,57 +494,5 @@ app.get("/admin/contacts", requireAdmin, async (req, res) => {
   const contacts = await Contact.find({}).sort({ updatedAt: -1 }).limit(200).lean();
   res.json(contacts);
 });
-
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.pbkdf2Sync(password, salt, 120000, 32, "sha256").toString("hex");
-  return `${salt}:${hash}`;
-}
-
-app.post("/admin/setup", async (req, res) => {
-  try {
-    const ADMIN_SETUP_KEY = process.env.ADMIN_SETUP_KEY;
-
-    if (!ADMIN_SETUP_KEY) {
-      return res.status(500).json({ error: "Missing ADMIN_SETUP_KEY env on server" });
-    }
-
-    const headerKey = req.headers["x-setup-key"];
-    if (!headerKey || headerKey !== ADMIN_SETUP_KEY) {
-      return res.status(401).json({ error: "Invalid setup key" });
-    }
-
-    const { name, email, password } = req.body || {};
-    if (!name || !email || !password) {
-      return res.status(400).json({ error: "Required: name, email, password" });
-    }
-
-    const existing = await AdminUser.findOne({}).lean();
-    if (existing) {
-      return res.status(409).json({ error: "Admin already initialized" });
-    }
-
-    const user = await AdminUser.create({
-      name,
-      email: email.toLowerCase().trim(),
-      passwordHash: hashPassword(password),
-      role: "admin",
-      active: true
-    });
-
-    return res.status(201).json({
-      ok: true,
-      adminId: user._id,
-      email: user.email,
-      role: user.role
-    });
-  } catch (err) {
-    console.error("❌ /admin/setup error:", err?.message || err);
-    return res.status(500).json({ error: "Server error" });
-  }
-});
-
-
 
 app.listen(PORT, () => console.log(`✅ Server listening on port ${PORT}`));
