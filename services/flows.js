@@ -40,6 +40,37 @@ function isBot(text) {
   return ["bot", "menu", "start"].includes(t);
 }
 
+function isAgent(text) {
+  const t = normalizeText(text);
+  return ["agent", "human", "representative", "rep"].includes(t);
+}
+
+function resetContext(convo) {
+  convo.context = {
+    goal: "",
+    trialName: "",
+    trialDay: "",
+    trialTimeSlot: ""
+  };
+}
+
+async function enableHandoff(convo) {
+  convo.handoffMode = true;
+  convo.state = "HUMAN";
+  convo.status = "open";       // new field
+  convo.assignedTo = null;     // new field
+  convo.assignedAt = null;     // new field
+}
+
+async function disableHandoff(convo) {
+  convo.handoffMode = false;
+  convo.state = "IDLE";
+  convo.status = "closed";
+  convo.assignedTo = null;
+  convo.assignedAt = null;
+  resetContext(convo);
+}
+
 export async function handleInbound({ waId, phoneE164, text, interactive }) {
   // Log inbound
   await MessageLog.create({
@@ -69,27 +100,31 @@ export async function handleInbound({ waId, phoneE164, text, interactive }) {
   // Unsubscribe
   if (isStop(text || "")) {
     await Contact.updateOne({ waId }, { unsubscribed: true, optIn: false });
+
     await sendText(
       waId,
       "✅ You’re unsubscribed.\nAap ko ab messages nahi aayenge.\nType *START* to subscribe again."
     );
-    await MessageLog.create({ waId, direction: "out", type: "text", text: "Unsubscribed confirm" });
+
+    await MessageLog.create({
+      waId,
+      direction: "out",
+      type: "text",
+      text: "Unsubscribed confirm"
+    });
     return;
   }
 
-  // If in HUMAN mode, only allow BOT to return
+  // If in HUMAN mode, only allow BOT/menu to return
   if (convo.handoffMode || convo.state === "HUMAN") {
     if (isBot(text || "")) {
-      convo.handoffMode = false;
-      convo.state = "IDLE";
-      convo.context = {};
+      await disableHandoff(convo);
       await convo.save();
-
       await sendMainMenu(waId);
       return;
     }
 
-    // Bot stays silent (human will reply from admin panel later)
+    // Bot stays silent (admins reply from dashboard)
     return;
   }
 
@@ -101,21 +136,27 @@ export async function handleInbound({ waId, phoneE164, text, interactive }) {
   if (isGreeting(incomingText) || buttonId === "MENU") {
     await sendMainMenu(waId);
     convo.state = "IDLE";
-    convo.context = {};
+    resetContext(convo);
     await convo.save();
     return;
   }
 
-  if (buttonId === "HUMAN" || normalizeText(incomingText) === "agent" || normalizeText(incomingText) === "human") {
-    convo.handoffMode = true;
-    convo.state = "HUMAN";
+  // Human handoff trigger
+  if (buttonId === "HUMAN" || isAgent(incomingText)) {
+    await enableHandoff(convo);
     await convo.save();
 
     await sendText(
       waId,
       "✅ Team ko notify kar diya hai.\nRepresentative aap ko reply karega.\n\nType *BOT* to go back to menu."
     );
-    await MessageLog.create({ waId, direction: "out", type: "text", text: "Handoff enabled" });
+
+    await MessageLog.create({
+      waId,
+      direction: "out",
+      type: "text",
+      text: "Handoff enabled"
+    });
     return;
   }
 
@@ -141,7 +182,7 @@ export async function handleInbound({ waId, phoneE164, text, interactive }) {
 
     default:
       convo.state = "IDLE";
-      convo.context = {};
+      resetContext(convo);
       await convo.save();
       await sendMainMenu(waId);
       return;
@@ -152,15 +193,22 @@ async function sendMainMenu(waId) {
   const body =
     "Assalam o Alaikum! 👋\nStructure Gym mein khush amdeed.\n\nHow can I help you?";
 
+  // WhatsApp buttons max = 3
   await sendButtons(waId, body, [
     { id: "PRICING", title: "💰 Membership Pricing" },
     { id: "TRIAL", title: "🆓 Book Free Trial" },
     { id: "LOCATION", title: "📍 Location & Timings" }
   ]);
 
-  // Add second row with human option as a follow-up text (buttons max 3)
+  // Human option as follow-up text
   await sendText(waId, "Need help? Reply *AGENT* to talk to a representative.");
-  await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Main menu" });
+
+  await MessageLog.create({
+    waId,
+    direction: "out",
+    type: "interactive",
+    text: "Main menu"
+  });
 }
 
 async function handleIdle({ waId, convo, buttonId, incomingText }) {
@@ -168,7 +216,7 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
 
   if (buttonId === "PRICING" || t.includes("pricing") || t.includes("price")) {
     convo.state = "PRICING_GOAL";
-    convo.context = {};
+    resetContext(convo);
     await convo.save();
 
     await sendButtons(waId, "Aap ka goal kya hai? (Choose one)", [
@@ -176,13 +224,14 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
       { id: "GOAL_MUSCLE", title: "Muscle Gain" },
       { id: "GOAL_GENERAL", title: "General Fitness" }
     ]);
+
     await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Ask goal" });
     return;
   }
 
   if (buttonId === "TRIAL" || t.includes("trial")) {
     convo.state = "TRIAL_NAME";
-    convo.context = {};
+    resetContext(convo);
     await convo.save();
 
     await sendText(waId, "Great! Free trial book karte hain ✅\nAap ka *name* kya hai?");
@@ -191,7 +240,6 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
   }
 
   if (buttonId === "LOCATION" || t.includes("location") || t.includes("timing")) {
-    // Replace with your real info
     await sendText(
       waId,
       "📍 Location: (your address here)\n🕒 Timings:\nMorning: 6am–11am\nEvening: 4pm–11pm\n\nReply *TRIAL* to book a free trial."
@@ -200,7 +248,6 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
     return;
   }
 
-  // Fallback
   await sendMainMenu(waId);
 }
 
@@ -223,7 +270,6 @@ async function handlePricingGoal({ waId, convo, buttonId, incomingText }) {
   convo.state = "IDLE";
   await convo.save();
 
-  // For now you only chose "Monthly" — we’ll expand plans later
   const msg =
     goal === "weight_loss"
       ? "✅ Weight loss ke liye best option: Monthly Membership.\n\nKya aap *free trial* book karna chahte hain?"
@@ -237,7 +283,12 @@ async function handlePricingGoal({ waId, convo, buttonId, incomingText }) {
     { id: "HUMAN", title: "Talk to Rep" }
   ]);
 
-  await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Pricing result + upsell" });
+  await MessageLog.create({
+    waId,
+    direction: "out",
+    type: "interactive",
+    text: "Pricing result + upsell"
+  });
 }
 
 async function handleTrialName({ waId, convo, contact, incomingText }) {
@@ -251,7 +302,6 @@ async function handleTrialName({ waId, convo, contact, incomingText }) {
   convo.state = "TRIAL_DAY";
   await convo.save();
 
-  // Save name to contact if empty
   if (!contact.name) {
     contact.name = name;
     await contact.save();
@@ -262,6 +312,7 @@ async function handleTrialName({ waId, convo, contact, incomingText }) {
     { id: "DAY_TOMORROW", title: "Tomorrow" },
     { id: "DAY_MANUAL", title: "Choose date" }
   ]);
+
   await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Ask day" });
 }
 
@@ -274,7 +325,6 @@ async function handleTrialDay({ waId, convo, buttonId, incomingText }) {
     await sendText(waId, "Date bhejein format mein: YYYY-MM-DD\nExample: 2026-02-28");
     return;
   } else {
-    // manual date text
     const d = incomingText.trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) {
       await sendText(waId, "Invalid date. Please send: YYYY-MM-DD (Example: 2026-02-28)");
@@ -291,6 +341,7 @@ async function handleTrialDay({ waId, convo, buttonId, incomingText }) {
     { id: "TIME_EVENING", title: "Evening (4–11)" },
     { id: "TIME_MANUAL", title: "Specific time" }
   ]);
+
   await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Ask time" });
 }
 
@@ -323,6 +374,7 @@ async function handleTrialTime({ waId, convo, buttonId, incomingText }) {
       { id: "MENU", title: "Menu" }
     ]
   );
+
   await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Confirm trial" });
 }
 
@@ -352,16 +404,16 @@ async function handleTrialConfirm({ waId, convo, contact, buttonId, incomingText
     status: "booked"
   });
 
-  // Tag lead
   await Contact.updateOne({ waId }, { $addToSet: { tags: "trial_booked" }, optIn: true });
 
   convo.state = "IDLE";
-  convo.context = {};
+  resetContext(convo);
   await convo.save();
 
   await sendText(
     waId,
     `✅ Trial booked!\n\nName: ${name}\nDay: ${day}\nTime: ${timeSlot}\n\nPlease 10 min pehle aa jayein. Reply *MENU* for options.`
   );
+
   await MessageLog.create({ waId, direction: "out", type: "text", text: "Trial booked confirmation" });
 }
