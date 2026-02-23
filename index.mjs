@@ -14,7 +14,6 @@ import AdminUser from "./models/AdminUser.js";
 import { handleInbound } from "./services/flows.js";
 import { sendText } from "./services/whatsapp.js";
 
-import AdminUser from "./models/AdminUser.js";
 import crypto from "crypto";
 
 dotenv.config();
