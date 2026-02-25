@@ -225,7 +225,7 @@ document.getElementById("handoffBtn").addEventListener("click", async () => {
     return;
   }
 
-  const r = await fetch(`/admin/conversations/${waId}/handoff/on`, {
+  const r = await fetch(`/admin/conversations/` + waId + `/handoff/on`, {
     method: "POST"
   });
 
