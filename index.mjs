@@ -349,6 +349,30 @@ app.get("/admin/me", requireAdmin, async (req, res) => {
   res.json({ ok: true, admin: { id: admin._id, email: admin.email, role: admin.role, name: admin.name } });
 });
 
+
+
+// Enable handoff mode for a conversation
+app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res) => {
+  const waId = req.params.waId;
+
+  const convo = await Conversation.findOneAndUpdate(
+    { waId },
+    {
+      $setOnInsert: { waId },
+      $set: {
+        handoffMode: true,
+        status: "open",
+        assignedTo: null,
+        assignedAt: null
+      }
+    },
+    { upsert: true, new: true }
+  ).lean();
+
+  res.json({ ok: true, convo });
+});
+
+
 // -------------------------
 // Admin Inbox + Handoff APIs
 // -------------------------
