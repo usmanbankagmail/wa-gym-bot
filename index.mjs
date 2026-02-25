@@ -188,7 +188,7 @@ app.get("/admin/app", (req, res) => {
     Enable Handoff
   </button>
 
-  <div id="handoffResult"></div>
+  <pre id="handoffResult" style="background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto"></pre>
 </div>
 
 
@@ -218,7 +218,12 @@ loadMe();
 
 document.getElementById("handoffBtn").addEventListener("click", async () => {
 
-  const waId = document.getElementById("waid").value;
+  const waId = document.getElementById("waid").value.trim();
+
+  if (!waId) {
+    document.getElementById("handoffResult").innerText = "waId is required";
+    return;
+  }
 
   const r = await fetch(`/admin/conversations/${waId}/handoff/on`, {
     method: "POST"
