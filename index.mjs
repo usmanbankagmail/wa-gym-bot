@@ -165,6 +165,14 @@ app.get("/admin/app", (req, res) => {
   </style>
 </head>
 <body>
+    <div class="card">
+  <h3>Inbox</h3>
+
+  <button id="refreshInbox">Refresh Inbox</button>
+
+  <pre id="inboxOut"></pre>
+</div>
+
   <div class="top">
     <h2>Admin Dashboard (MVP)</h2>
     <button id="logout">Logout</button>
@@ -215,6 +223,7 @@ document.getElementById("logout").addEventListener("click", async ()=>{
 });
 
 loadMe();
+loadInbox();
 
 document.getElementById("handoffBtn").addEventListener("click", async () => {
 
@@ -235,7 +244,17 @@ document.getElementById("handoffBtn").addEventListener("click", async () => {
     JSON.stringify(data,null,2);
 
 });
+
+async function loadInbox(){
+  const r = await fetch("/admin/inbox");
+  const data = await r.json().catch(()=>({}));
+  document.getElementById("inboxOut").textContent = JSON.stringify(data, null, 2);
+}
+
+document.getElementById("refreshInbox").addEventListener("click", loadInbox);
+
 </script>
+
 </body>
 </html>`);
 });
