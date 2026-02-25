@@ -1,3 +1,20 @@
+// index.mjs — WhatsApp Cloud API Gym Bot + Admin UI (single-file server)
+// - Webhook verify + receive
+// - Admin auth (JWT in httpOnly cookie)
+// - Admin UI pages: /admin (login), /admin/app (dashboard)
+// - Handoff mode tools + inbox + messages + send message
+//
+// Required env (Railway):
+//   PORT=8080 (Railway sets automatically)
+//   MONGODB_URI=...
+//   VERIFY_TOKEN=...
+//   ADMIN_JWT_SECRET=...   (set a strong secret)
+//   ADMIN_SETUP_KEY=...    (for first admin setup)
+//
+// Notes:
+// - trust proxy enabled for Railway
+// - cookies: secure in prod only
+
 import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -93,10 +110,7 @@ app.get("/admin", (req, res) => {
     label{display:block;margin:10px 0 6px;}
     input{width:100%;padding:10px;border:1px solid #ccc;border-radius:10px;}
     button{margin-top:14px;padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
-    .row{display:flex;gap:10px}
-    .row > div{flex:1}
     .err{color:#b00020;margin-top:10px;white-space:pre-wrap}
-    .ok{color:#0b6b0b;margin-top:10px;white-space:pre-wrap}
     code{background:#f6f6f6;padding:2px 6px;border-radius:6px}
   </style>
 </head>
@@ -138,7 +152,6 @@ document.getElementById("f").addEventListener("submit", async (e) => {
     return;
   }
 
-  // Cookie is set by server. Now go to app.
   window.location.href = "/admin/app";
 });
 </script>
@@ -147,6 +160,8 @@ document.getElementById("f").addEventListener("submit", async (e) => {
 });
 
 app.get("/admin/app", (req, res) => {
+  // IMPORTANT: do NOT use backticks or ${} inside this embedded <script>
+  // Use string concatenation only, to avoid crashing the server template literal.
   res.type("html").send(`<!doctype html>
 <html>
 <head>
@@ -162,21 +177,14 @@ app.get("/admin/app", (req, res) => {
     a{color:#0b57d0;text-decoration:none}
     a:hover{text-decoration:underline}
     .links a{margin-right:14px}
+    input, textarea{padding:10px;border:1px solid #ccc;border-radius:10px;width:100%;}
+    textarea{min-height:80px;resize:vertical;}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .row > *{flex:1}
+    .small{color:#666;font-size:12px}
   </style>
 </head>
 <body>
-    <div class="card">
-  <h3>Inbox</h3>
-
-  <button id="refreshInbox">Refresh Inbox</button>
-    <div id="inboxList" style="margin-top:12px"></div>
-    <h4 style="margin-top:16px">Selected Chat</h4>
-  <div>waId: <span id="selectedWaId">-</span></div>
-
-  <h4 style="margin-top:16px">Messages</h4>
-  <pre id="msgsOut"></pre>
-  <pre id="inboxOut"></pre>
-</div>
 
   <div class="top">
     <h2>Admin Dashboard (MVP)</h2>
@@ -193,18 +201,33 @@ app.get("/admin/app", (req, res) => {
   </div>
 
   <div class="card">
-  <h3>Enable Handoff (Test Tool)</h3>
+    <h3>Enable Handoff (Test Tool)</h3>
+    <div class="row">
+      <input id="waid" placeholder="Enter waId (e.g. 923322377663)" />
+      <button id="handoffBtn" style="flex:0 0 auto">Enable Handoff</button>
+    </div>
+    <pre id="handoffResult"></pre>
+    <div class="small">Tip: after enabling, click “Refresh Inbox”.</div>
+  </div>
 
-  <input id="waid" placeholder="Enter waId (e.g. 923322377663)" style="width:300px;padding:8px">
+  <div class="card">
+    <h3>Inbox</h3>
+    <button id="refreshInbox">Refresh Inbox</button>
+    <div id="inboxList" style="margin-top:12px"></div>
 
-  <button id="handoffBtn">
-    Enable Handoff
-  </button>
+    <h4 style="margin-top:16px">Selected Chat</h4>
+    <div>waId: <span id="selectedWaId">-</span></div>
 
-  <pre id="handoffResult" style="background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto"></pre>
-</div>
+    <div style="margin-top:12px">
+      <h4>Send message</h4>
+      <textarea id="sendText" placeholder="Type message to send..."></textarea>
+      <button id="sendBtn" style="margin-top:8px">Send</button>
+      <pre id="sendResult"></pre>
+    </div>
 
-
+    <h4 style="margin-top:16px">Messages</h4>
+    <pre id="msgsOut"></pre>
+  </div>
 
   <div class="card">
     <h3>Session check</h3>
@@ -213,48 +236,20 @@ app.get("/admin/app", (req, res) => {
   </div>
 
 <script>
+let selectedWaId = null;
+
 async function loadMe(){
   const r = await fetch("/admin/me");
-  const data = await r.json().catch(()=>({}));
+  const data = await r.json().catch(function(){ return {}; });
   document.getElementById("out").textContent = JSON.stringify(data, null, 2);
   document.getElementById("status").textContent =
     (r.ok && data.ok) ? ("Logged in as: " + data.admin.email + " (" + data.admin.role + ")")
-                      : ("NOT logged in ("+r.status+"): " + (data.error || ""));
+                      : ("NOT logged in (" + r.status + "): " + (data.error || ""));
 }
 
-document.getElementById("logout").addEventListener("click", async ()=>{
-  await fetch("/admin/auth/logout", { method:"POST" });
-  window.location.href = "/admin";
-});
-
-loadMe();
-loadInbox();
-
-document.getElementById("handoffBtn").addEventListener("click", async () => {
-
-  const waId = document.getElementById("waid").value.trim();
-
-  if (!waId) {
-    document.getElementById("handoffResult").innerText = "waId is required";
-    return;
-  }
-
-  const r = await fetch('/admin/conversations/' + waId + '/handoff/on', {
-    method: "POST"
-  });
-
-  const data = await r.json();
-
-  document.getElementById("handoffResult").innerText =
-    JSON.stringify(data,null,2);
-
-});
-
-
-let selectedWaId = null;
 async function loadInbox(){
   const r = await fetch("/admin/inbox");
-  const data = await r.json().catch(()=>({}));
+  const data = await r.json().catch(function(){ return {}; });
 
   const list = document.getElementById("inboxList");
   list.innerHTML = "";
@@ -269,27 +264,78 @@ async function loadInbox(){
     return;
   }
 
-  data.convos.forEach(c => {
+  data.convos.forEach(function(c){
     const b = document.createElement("button");
-    b.textContent = `${c.waId} | ${c.status} | ${c.lastMessagePreview || ""}`;
+    b.textContent = (c.waId || "") + " | " + (c.status || "") + " | " + (c.lastMessagePreview || "");
     b.style.display = "block";
     b.style.marginTop = "8px";
-
-    b.addEventListener("click", () => selectChat(c.waId));
+    b.addEventListener("click", function(){ selectChat(c.waId); });
     list.appendChild(b);
   });
 }
 
 async function selectChat(waId){
   selectedWaId = waId;
-  document.getElementById("selectedWaId").textContent = waId;
+  document.getElementById("selectedWaId").textContent = waId || "-";
+  document.getElementById("sendResult").textContent = "";
 
   const r = await fetch("/admin/conversations/" + waId + "/messages");
-  const data = await r.json().catch(()=>({}));
+  const data = await r.json().catch(function(){ return {}; });
   document.getElementById("msgsOut").textContent = JSON.stringify(data, null, 2);
 }
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
+
+document.getElementById("handoffBtn").addEventListener("click", async function(){
+  const waId = document.getElementById("waid").value.trim();
+
+  if (!waId) {
+    document.getElementById("handoffResult").textContent = "waId is required";
+    return;
+  }
+
+  const r = await fetch("/admin/conversations/" + waId + "/handoff/on", { method: "POST" });
+  const data = await r.json().catch(function(){ return {}; });
+  document.getElementById("handoffResult").textContent = JSON.stringify(data, null, 2);
+
+  loadInbox();
+});
+
+document.getElementById("sendBtn").addEventListener("click", async function(){
+  if (!selectedWaId) {
+    document.getElementById("sendResult").textContent = "Select a chat first.";
+    return;
+  }
+
+  const text = document.getElementById("sendText").value.trim();
+  if (!text) {
+    document.getElementById("sendResult").textContent = "Message text is required.";
+    return;
+  }
+
+  const r = await fetch("/admin/conversations/" + selectedWaId + "/messages", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({ text: text })
+  });
+
+  const data = await r.json().catch(function(){ return {}; });
+  document.getElementById("sendResult").textContent = JSON.stringify(data, null, 2);
+
+  if (r.ok && data.ok) {
+    document.getElementById("sendText").value = "";
+    selectChat(selectedWaId);
+    loadInbox();
+  }
+});
+
+document.getElementById("logout").addEventListener("click", async function(){
+  await fetch("/admin/auth/logout", { method:"POST" });
+  window.location.href = "/admin";
+});
+
+loadMe();
+loadInbox();
 </script>
 
 </body>
@@ -439,9 +485,10 @@ app.get("/admin/me", requireAdmin, async (req, res) => {
   res.json({ ok: true, admin: { id: admin._id, email: admin.email, role: admin.role, name: admin.name } });
 });
 
+// -------------------------
+// Handoff Mode + Inbox APIs
+// -------------------------
 
-
-// Enable handoff mode for a conversation
 // Enable handoff mode for a conversation
 app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res) => {
   try {
@@ -469,10 +516,7 @@ app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res)
   }
 });
 
-// -------------------------
-// Admin Inbox + Handoff APIs
-// -------------------------
-
+// List handoff conversations
 app.get("/admin/inbox", requireAdmin, async (req, res) => {
   const status = req.query.status; // open|assigned|closed
   const q = { handoffMode: true };
@@ -487,6 +531,7 @@ app.get("/admin/inbox", requireAdmin, async (req, res) => {
   res.json({ ok: true, convos });
 });
 
+// Take/assign a chat (anti-collision)
 app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
@@ -513,6 +558,7 @@ app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => 
   res.json({ ok: true, convo: updated });
 });
 
+// Release a chat
 app.post("/admin/conversations/:waId/unassign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
@@ -533,6 +579,7 @@ app.post("/admin/conversations/:waId/unassign", requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
+// Close chat (end handoff)
 app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
@@ -555,15 +602,18 @@ app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Get messages
 app.get("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
   const logs = await MessageLog.find({ waId }).sort({ createdAt: 1 }).limit(500).lean();
   res.json({ ok: true, logs });
 });
 
+// Send message as admin (WhatsApp + DB)
 app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
   const { text } = req.body || {};
+
   if (!text || !text.trim()) {
     return res.status(400).json({ ok: false, error: "text required" });
   }
@@ -582,14 +632,17 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
     return res.status(409).json({ ok: false, error: "Chat assigned to another admin" });
   }
 
+  // If unassigned, auto-assign to sender
   if (!convo.assignedTo) {
     convo.assignedTo = new mongoose.Types.ObjectId(req.admin.id);
     convo.assignedAt = new Date();
     convo.status = "assigned";
   }
 
+  // Send WhatsApp
   const waRes = await sendText(waId, text.trim());
 
+  // Save message log
   await MessageLog.create({
     waId,
     direction: "out",
@@ -604,6 +657,10 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
 
   res.json({ ok: true });
 });
+
+// -------------------------
+// Existing simple admin endpoints (keep)
+// -------------------------
 
 app.get("/admin/trials", requireAdmin, async (req, res) => {
   const trials = await Trial.find({}).sort({ createdAt: -1 }).limit(200).lean();
