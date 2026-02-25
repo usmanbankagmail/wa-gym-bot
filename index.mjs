@@ -180,6 +180,20 @@ app.get("/admin/app", (req, res) => {
   </div>
 
   <div class="card">
+  <h3>Enable Handoff (Test Tool)</h3>
+
+  <input id="waid" placeholder="Enter waId (e.g. 923322377663)" style="width:300px;padding:8px">
+
+  <button id="handoffBtn">
+    Enable Handoff
+  </button>
+
+  <div id="handoffResult"></div>
+</div>
+
+
+
+  <div class="card">
     <h3>Session check</h3>
     <div id="status">Loading...</div>
     <pre id="out"></pre>
@@ -201,6 +215,21 @@ document.getElementById("logout").addEventListener("click", async ()=>{
 });
 
 loadMe();
+
+document.getElementById("handoffBtn").addEventListener("click", async () => {
+
+  const waId = document.getElementById("waid").value;
+
+  const r = await fetch(`/admin/conversations/${waId}/handoff/on`, {
+    method: "POST"
+  });
+
+  const data = await r.json();
+
+  document.getElementById("handoffResult").innerText =
+    JSON.stringify(data,null,2);
+
+});
 </script>
 </body>
 </html>`);
