@@ -169,7 +169,12 @@ app.get("/admin/app", (req, res) => {
   <h3>Inbox</h3>
 
   <button id="refreshInbox">Refresh Inbox</button>
+    <div id="inboxList" style="margin-top:12px"></div>
+    <h4 style="margin-top:16px">Selected Chat</h4>
+  <div>waId: <span id="selectedWaId">-</span></div>
 
+  <h4 style="margin-top:16px">Messages</h4>
+  <pre id="msgsOut"></pre>
   <pre id="inboxOut"></pre>
 </div>
 
@@ -245,14 +250,46 @@ document.getElementById("handoffBtn").addEventListener("click", async () => {
 
 });
 
+
+let selectedWaId = null;
 async function loadInbox(){
   const r = await fetch("/admin/inbox");
   const data = await r.json().catch(()=>({}));
-  document.getElementById("inboxOut").textContent = JSON.stringify(data, null, 2);
+
+  const list = document.getElementById("inboxList");
+  list.innerHTML = "";
+
+  if (!r.ok || !data.ok) {
+    list.textContent = "Failed to load inbox";
+    return;
+  }
+
+  if (!data.convos || data.convos.length === 0) {
+    list.textContent = "No handoff conversations.";
+    return;
+  }
+
+  data.convos.forEach(c => {
+    const b = document.createElement("button");
+    b.textContent = `${c.waId} | ${c.status} | ${c.lastMessagePreview || ""}`;
+    b.style.display = "block";
+    b.style.marginTop = "8px";
+
+    b.addEventListener("click", () => selectChat(c.waId));
+    list.appendChild(b);
+  });
+}
+
+async function selectChat(waId){
+  selectedWaId = waId;
+  document.getElementById("selectedWaId").textContent = waId;
+
+  const r = await fetch("/admin/conversations/" + waId + "/messages");
+  const data = await r.json().catch(()=>({}));
+  document.getElementById("msgsOut").textContent = JSON.stringify(data, null, 2);
 }
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
-
 </script>
 
 </body>
