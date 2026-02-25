@@ -386,26 +386,32 @@ app.get("/admin/me", requireAdmin, async (req, res) => {
 
 
 // Enable handoff mode for a conversation
+// Enable handoff mode for a conversation
 app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res) => {
-  const waId = req.params.waId;
+  try {
+    const waId = (req.params.waId || "").trim();
+    if (!waId) return res.status(400).json({ ok: false, error: "waId required" });
 
-  const convo = await Conversation.findOneAndUpdate(
-    { waId },
-    {
-      $setOnInsert: { waId },
-      $set: {
-        handoffMode: true,
-        status: "open",
-        assignedTo: null,
-        assignedAt: null
-      }
-    },
-    { upsert: true, new: true }
-  ).lean();
+    const convo = await Conversation.findOneAndUpdate(
+      { waId },
+      {
+        $setOnInsert: { waId },
+        $set: {
+          handoffMode: true,
+          status: "open",
+          assignedTo: null,
+          assignedAt: null
+        }
+      },
+      { upsert: true, new: true }
+    ).lean();
 
-  res.json({ ok: true, convo });
+    return res.json({ ok: true, convo });
+  } catch (e) {
+    console.error("❌ handoff/on error:", e?.message || e);
+    return res.status(500).json({ ok: false, error: e?.message || "Server error" });
+  }
 });
-
 
 // -------------------------
 // Admin Inbox + Handoff APIs
