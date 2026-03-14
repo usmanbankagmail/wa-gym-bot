@@ -672,4 +672,22 @@ app.get("/admin/contacts", requireAdmin, async (req, res) => {
   res.json(contacts);
 });
 
+app.post("/admin/trials/:id/status", requireAdmin, async (req,res) => {
+  const { status } = req.body || {};
+  const allowed = ["booked","attended","no-show","cancelled"];
+
+  if(!allowed.includes(status)) {
+    return res.status(400).json({ok: false, error: "Invalid status" });
+    }
+  
+  const trial = await Trial.findByIdAndUpdate(
+    req.params.id,
+    { $set: { status } },
+    { new: true },
+  );
+
+  res.json({ ok: true, trial});
+
+});
+
 app.listen(PORT, () => console.log(`✅ Server listening on port ${PORT}`));
