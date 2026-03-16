@@ -159,7 +159,7 @@ document.getElementById("f").addEventListener("submit", async (e) => {
 </html>`);
 });
 
-app.get("/admin/app", (req, res) => {
+app.get("/admin/app", requireAdmin, (req, res) => {
   // IMPORTANT: do NOT use backticks or ${} inside this embedded <script>
   // Use string concatenation only, to avoid crashing the server template literal.
   res.type("html").send(`<!doctype html>
@@ -284,7 +284,17 @@ async function selectChat(waId){
 
   const r = await fetch("/admin/conversations/" + waId + "/messages");
   const data = await r.json().catch(function(){ return {}; });
-  document.getElementById("msgsOut").textContent = JSON.stringify(data, null, 2);
+  const out = document.getElementById("msgsOut");
+
+if (!data.ok || !data.messages) {
+  out.textContent = "No messages";
+  return;
+}
+
+out.textContent = data.messages.map(function(m){
+  const who = m.direction === "in" ? "Customer" : "Bot/Admin";
+  return who + ": " + (m.text || "");
+}).join("\n");
 }
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
@@ -534,6 +544,34 @@ app.get("/admin/inbox", requireAdmin, async (req, res) => {
   res.json({ ok: true, convos });
 });
 
+app.get("/admin/inbox/full", requireAdmin, async (req, res) => {
+  const status = req.query.status;
+  const q = { handoffMode: true };
+  if (status) q.status = status;
+
+  const convos = await Conversation.find(q)
+    .sort({ lastMessageAt: -1, updatedAt: -1 })
+    .limit(300)
+    .populate("assignedTo", "name email role")
+    .lean();
+
+  const waIds = convos.map(function(c){ return c.waId; });
+  const contacts = await Contact.find({ waId: { $in: waIds } }).lean();
+
+  const contactMap = new Map(
+    contacts.map(function(c){ return [c.waId, c]; })
+  );
+
+  const rows = convos.map(function(c){
+    return {
+      ...c,
+      contact: contactMap.get(c.waId) || null
+    };
+  });
+
+  res.json({ ok: true, convos: rows });
+});
+
 // Take/assign a chat (anti-collision)
 app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
@@ -609,7 +647,7 @@ app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
 app.get("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
   const logs = await MessageLog.find({ waId }).sort({ createdAt: 1 }).limit(500).lean();
-  res.json({ ok: true, logs });
+  res.json({ ok: true, messages: logs });
 });
 
 // Send message as admin (WhatsApp + DB)
@@ -677,7 +715,7 @@ app.get("/admin/contacts", requireAdmin, async (req, res) => {
 
 app.post("/admin/trials/:id/status", requireAdmin, async (req,res) => {
   const { status } = req.body || {};
-  const allowed = ["booked","attended","no-show","cancelled"];
+  const allowed = ["booked","attended","no_show","cancelled"];
 
   if(!allowed.includes(status)) {
     return res.status(400).json({ok: false, error: "Invalid status" });
