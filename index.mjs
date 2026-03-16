@@ -271,6 +271,9 @@ async function loadInbox(){
 
 b.textContent = name + " | " + assigned + " | " + (c.status || "") + " | " + (c.lastMessagePreview || "");
     b.style.display = "block";
+    b.style.width = "100%";
+b.style.textAlign = "left";
+b.style.whiteSpace = "normal";
     b.style.marginTop = "8px";
     b.addEventListener("click", function(){ selectChat(c.waId); });
     list.appendChild(b);
@@ -292,9 +295,16 @@ if (!data.ok || !data.messages) {
 }
 
 out.textContent = data.messages.map(function(m){
-  const who = m.direction === "in" ? "Customer" : "Bot/Admin";
+  let who = "Bot";
+
+  if (m.direction === "in") {
+    who = "Customer";
+  } else if (m.meta && m.meta.byAdminId) {
+    who = "Admin";
+  }
+
   return who + ": " + (m.text || "");
-}).join("\n");
+}).join("\\n");
 }
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
