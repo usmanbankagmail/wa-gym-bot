@@ -248,7 +248,7 @@ async function loadMe(){
 }
 
 async function loadInbox(){
-  const r = await fetch("/admin/inbox");
+  const r = await fetch("/admin/inbox/full");
   const data = await r.json().catch(function(){ return {}; });
 
   const list = document.getElementById("inboxList");
@@ -266,7 +266,10 @@ async function loadInbox(){
 
   data.convos.forEach(function(c){
     const b = document.createElement("button");
-    b.textContent = (c.waId || "") + " | " + (c.status || "") + " | " + (c.lastMessagePreview || "");
+    const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
+    const assigned = (c.assignedTo && c.assignedTo.name) ? c.assignedTo.name : "Unassigned";
+
+b.textContent = name + " | " + assigned + " | " + (c.status || "") + " | " + (c.lastMessagePreview || "");
     b.style.display = "block";
     b.style.marginTop = "8px";
     b.addEventListener("click", function(){ selectChat(c.waId); });
