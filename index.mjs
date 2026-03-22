@@ -226,7 +226,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     </div>
 
     <h4 style="margin-top:16px">Messages</h4>
-    <pre id="msgsOut"></pre>
+    <div id="msgsOut" style="background:#f6f6f6;padding:12px;border-radius:12px;min-height:120px"></div>
   </div>
 
   <div class="card">
@@ -294,7 +294,7 @@ if (!data.ok || !data.messages) {
   return;
 }
 
-out.textContent = data.messages.map(function(m){
+out.innerHTML = data.messages.map(function(m){
   let who = "Bot";
 
   if (m.direction === "in") {
@@ -303,8 +303,14 @@ out.textContent = data.messages.map(function(m){
     who = "Admin";
   }
 
-  return who + ": " + (m.text || "");
-}).join("\\n");
+  const bg = m.direction === "in" ? "#ffffff" : "#e9f3ff";
+const align = m.direction === "in" ? "0 auto 10px 0" : "0 0 10px auto";
+
+return '<div style="margin:' + align + ';padding:10px;border-radius:10px;background:' + bg + ';border:1px solid #ddd;max-width:80%;">'
+    + '<strong>' + who + ':</strong><br>'
+    + (m.text || "")
+    + '</div>';
+}).join("");
 }
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
