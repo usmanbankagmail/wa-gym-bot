@@ -274,16 +274,21 @@ b.style.borderRadius = "12px";
 b.style.background = "#fff";
 b.onmouseover = function(){ b.style.background = "#f0f7ff"; };
 b.onmouseout = function(){ b.style.background = "#fff"; };
-    b.addEventListener("click", function(){ selectChat(c.waId); });
+    b.addEventListener("click", function(){
+  selectChat(c.waId, name, assigned, c.status || "");
+});
     list.appendChild(b);
   });
 }
 
-async function selectChat(waId){
+async function selectChat(waId, name, assigned, status){
   selectedWaId = waId;
-  document.getElementById("selectedWaId").textContent = waId || "-";
+  
   document.getElementById("sendResult").textContent = "";
-
+const meta = document.getElementById("selectedChatMeta");
+meta.innerHTML =
+  '<div><strong>' + (name || "Customer") + '</strong> (' + waId + ')</div>' +
+  '<div style="font-size:12px;color:#666;margin-top:4px;">Status: ' + (status || "") + ' | Assigned: ' + (assigned || "Unassigned") + '</div>';
   const r = await fetch("/admin/conversations/" + waId + "/messages");
   const data = await r.json().catch(function(){ return {}; });
   const out = document.getElementById("msgsOut");
@@ -340,7 +345,7 @@ document.getElementById("sendBtn").addEventListener("click", async function(){
 
   if (r.ok && data.ok) {
     document.getElementById("sendText").value = "";
-    selectChat(selectedWaId);
+    selectChat(selectedWaId, name, assigned, status);
     loadInbox();
   }
 });
@@ -350,7 +355,7 @@ document.getElementById("logout").addEventListener("click", async function(){
   window.location.href = "/admin";
 });
 
-loadMe();
+
 loadInbox();
 </script>
 
