@@ -125,9 +125,7 @@ app.get("/admin", (req, res) => {
       <button type="submit">Login</button>
     </form>
     <div id="msg" class=""></div>
-    <p style="margin-top:12px;color:#555">
-      After login you should be redirected to <code>/admin/app</code>.
-    </p>
+    
   </div>
 
 <script>
@@ -317,10 +315,13 @@ out.innerHTML = data.messages.map(function(m){
   const bg = m.direction === "in" ? "#ffffff" : "#e9f3ff";
 const align = m.direction === "in" ? "0 auto 10px 0" : "0 0 10px auto";
 
+const timeText = new Date(m.createdAt).toLocaleString();
+
 return '<div style="margin:' + align + ';padding:10px;border-radius:10px;background:' + bg + ';border:1px solid #ddd;max-width:80%;">'
-    + '<div style="font-size:12px;color:#666;margin-bottom:4px;"><strong>' + who + '</strong></div>'
-+ '<div>' + (m.text || "") + '</div>'
-    + '</div>';
+  + '<div style="font-size:12px;color:#666;margin-bottom:4px;"><strong>' + who + '</strong></div>'
+  + '<div>' + (m.text || "") + '</div>'
+  + '<div style="font-size:11px;color:#999;margin-top:6px;">' + timeText + '</div>'
+  + '</div>';
 }).join("");
 out.scrollTop = out.scrollHeight;
 }
