@@ -233,6 +233,9 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 
 <script>
 let selectedWaId = null;
+let selectedChatName = "";
+let selectedChatAssigned = "";
+let selectedChatStatus = "";
 
 
 
@@ -283,6 +286,10 @@ b.onmouseout = function(){ b.style.background = "#fff"; };
 
 async function selectChat(waId, name, assigned, status){
   selectedWaId = waId;
+
+  selectedChatName = name || "";
+selectedChatAssigned = assigned || "";
+selectedChatStatus = status || "";
   
   document.getElementById("sendResult").textContent = "";
 const meta = document.getElementById("selectedChatMeta");
@@ -345,7 +352,7 @@ document.getElementById("sendBtn").addEventListener("click", async function(){
 
   if (r.ok && data.ok) {
     document.getElementById("sendText").value = "";
-    selectChat(selectedWaId, name, assigned, status);
+    selectChat(selectedWaId, selectedChatName, selectedChatAssigned, selectedChatStatus);
     loadInbox();
   }
 });
