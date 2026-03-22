@@ -3,17 +3,6 @@
 // - Admin auth (JWT in httpOnly cookie)
 // - Admin UI pages: /admin (login), /admin/app (dashboard)
 // - Handoff mode tools + inbox + messages + send message
-//
-// Required env (Railway):
-//   PORT=8080 (Railway sets automatically)
-//   MONGODB_URI=...
-//   VERIFY_TOKEN=...
-//   ADMIN_JWT_SECRET=...   (set a strong secret)
-//   ADMIN_SETUP_KEY=...    (for first admin setup)
-//
-// Notes:
-// - trust proxy enabled for Railway
-// - cookies: secure in prod only
 
 import express from "express";
 import mongoose from "mongoose";
@@ -47,7 +36,7 @@ const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 // Admin auth env
 const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || "dev_secret_change_me";
-const ADMIN_SETUP_KEY = process.env.ADMIN_SETUP_KEY || ""; // set in Railway to enable /admin/setup
+const ADMIN_SETUP_KEY = process.env.ADMIN_SETUP_KEY || "";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -80,8 +69,6 @@ function requireAdmin(req, res, next) {
 }
 
 function cookieOptions() {
-  // In prod (Railway HTTPS) => secure cookie required.
-  // In local dev (http://localhost) => secure must be false or cookie won't set.
   return {
     httpOnly: true,
     sameSite: "lax",
@@ -125,28 +112,29 @@ app.get("/admin", (req, res) => {
       <button type="submit">Login</button>
     </form>
     <div id="msg" class=""></div>
-    
   </div>
 
 <script>
 const msg = document.getElementById("msg");
 function setMsg(text, cls){ msg.className = cls; msg.textContent = text; }
 
-document.getElementById("f").addEventListener("submit", async (e) => {
+document.getElementById("f").addEventListener("submit", async function (e) {
   e.preventDefault();
   setMsg("", "");
+
   const email = document.getElementById("email").value.trim();
   const password = document.getElementById("password").value;
 
   const r = await fetch("/admin/auth/login", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({email, password})
+    body: JSON.stringify({ email: email, password: password })
   });
 
-  const data = await r.json().catch(() => ({}));
+  const data = await r.json().catch(function(){ return {}; });
+
   if (!r.ok || !data.ok) {
-    setMsg(data.error || ("Login failed ("+r.status+")"), "err");
+    setMsg(data.error || ("Login failed (" + r.status + ")"), "err");
     return;
   }
 
@@ -158,8 +146,6 @@ document.getElementById("f").addEventListener("submit", async (e) => {
 });
 
 app.get("/admin/app", requireAdmin, (req, res) => {
-  // IMPORTANT: do NOT use backticks or ${} inside this embedded <script>
-  // Use string concatenation only, to avoid crashing the server template literal.
   res.type("html").send(`<!doctype html>
 <html>
 <head>
@@ -167,9 +153,9 @@ app.get("/admin/app", requireAdmin, (req, res) => {
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Gym Admin</title>
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;max-width:920px;margin:36px auto;padding:0 16px;}
+    body{font-family:system-ui,Segoe UI,Arial;max-width:1100px;margin:36px auto;padding:0 16px;}
     .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
-    .card{border:1px solid #ddd;border-radius:12px;padding:16px;margin-top:16px;}
+    .card{border:1px solid #ddd;border-radius:12px;padding:16px;margin-top:16px;background:#fff;}
     button{padding:10px 14px;border:0;border-radius:10px;cursor:pointer}
     pre{background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto}
     a{color:#0b57d0;text-decoration:none}
@@ -177,9 +163,45 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     .links a{margin-right:14px}
     input, textarea{padding:10px;border:1px solid #ccc;border-radius:10px;width:100%;}
     textarea{min-height:80px;resize:vertical;}
-    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .row > *{flex:1}
     .small{color:#666;font-size:12px}
+    .chatBtn{
+      display:block;
+      width:100%;
+      text-align:left;
+      white-space:normal;
+      margin-top:8px;
+      padding:12px;
+      border:1px solid #ddd;
+      border-radius:12px;
+      background:#fff;
+    }
+    .chatBtn:hover{background:#f0f7ff;}
+    .chatBtn.active{background:#d8ebff;border-color:#9cc7ff;}
+    .msgRowIn{text-align:left;margin:10px 0;}
+    .msgRowOut{text-align:right;margin:10px 0;}
+    .msgBubble{
+      display:inline-block;
+      padding:10px;
+      border-radius:10px;
+      border:1px solid #ddd;
+      max-width:80%;
+      text-align:left;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+    .msgIn{background:#ffffff;}
+    .msgOut{background:#e9f3ff;}
+    .statusBar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+    .pill{
+      display:inline-block;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:12px;
+      background:#f1f1f1;
+      border:1px solid #ddd;
+    }
+    .actionRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+    .muted{color:#666;}
   </style>
 </head>
 <body>
@@ -198,20 +220,20 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     </div>
   </div>
 
-
-
-  <div class="card" style="padding:0;border:none;">
+  <div class="card" style="padding:0;border:none;background:transparent;">
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
       
-      <div class="card" style="flex:1;min-width:280px;">
+      <div class="card" style="flex:1;min-width:300px;">
         <h3>Inbox</h3>
-        <button id="refreshInbox">Refresh Inbox</button>
+        <div class="actionRow">
+          <button id="refreshInbox">Refresh Inbox</button>
+        </div>
         <div id="inboxList" style="margin-top:12px"></div>
       </div>
 
-      <div class="card" style="flex:2;min-width:320px;">
+      <div class="card" style="flex:2;min-width:380px;">
         <h3>Selected Chat</h3>
-        <div id="selectedChatMeta" style="margin-top:8px;color:#555;">No chat selected</div>
+        <div id="selectedChatMeta" class="muted" style="margin-top:8px;">No chat selected</div>
 
         <h4 style="margin-top:16px">Messages</h4>
         <div id="msgsOut" style="background:#f6f6f6;padding:12px;border-radius:12px;min-height:320px;max-height:500px;overflow:auto"></div>
@@ -219,7 +241,9 @@ app.get("/admin/app", requireAdmin, (req, res) => {
         <div style="margin-top:12px">
           <h4>Send message</h4>
           <textarea id="sendText" placeholder="Type message to send..."></textarea>
-          <button id="sendBtn" style="margin-top:8px">Send</button>
+          <div class="actionRow">
+            <button id="sendBtn">Send</button>
+          </div>
           <pre id="sendResult"></pre>
         </div>
       </div>
@@ -227,17 +251,23 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     </div>
   </div>
 
-
-
 <script>
 let selectedWaId = null;
 let selectedChatName = "";
 let selectedChatAssigned = "";
 let selectedChatStatus = "";
 
+let inboxTimer = null;
+let chatTimer = null;
 
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
-async function loadInbox(){
+async function loadInbox() {
   const r = await fetch("/admin/inbox/full");
   const data = await r.json().catch(function(){ return {}; });
 
@@ -254,83 +284,186 @@ async function loadInbox(){
     return;
   }
 
-  data.convos.forEach(function(c){
+  data.convos.forEach(function(c) {
     const b = document.createElement("button");
     const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
     const assigned = (c.assignedTo && c.assignedTo.name) ? c.assignedTo.name : "Unassigned";
+    const preview = c.lastMessagePreview || "";
+    const status = c.status || "";
 
-b.innerHTML =
-  '<div><strong>' + name + '</strong></div>' +
-  '<div style="font-size:12px;color:#666;">Last: ' + (c.lastMessagePreview || "") + '</div>' +
-  '<div style="font-size:12px;color:#999;">Status: ' + (c.status || "") + ' | Assigned: ' + assigned + '</div>';
+    b.className = "chatBtn" + (selectedWaId === c.waId ? " active" : "");
+    b.innerHTML =
+      '<div><strong>' + escapeHtml(name) + '</strong></div>' +
+      '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
+      '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
 
-    b.style.display = "block";
-    b.style.width = "100%";
-b.style.textAlign = "left";
-b.style.whiteSpace = "normal";
-    b.style.marginTop = "8px";
-    b.style.padding = "12px";
-b.style.border = "1px solid #ddd";
-b.style.borderRadius = "12px";
-b.style.background = "#fff";
-b.onmouseover = function(){ b.style.background = "#f0f7ff"; };
-b.onmouseout = function(){ b.style.background = "#fff"; };
-    b.addEventListener("click", function(){
-  selectChat(c.waId, name, assigned, c.status || "");
-});
+    b.addEventListener("click", function() {
+      selectChat(c.waId, name, assigned, status, false);
+    });
+
     list.appendChild(b);
   });
 }
 
-async function selectChat(waId, name, assigned, status){
+async function selectChat(waId, name, assigned, status, preserveScroll) {
   selectedWaId = waId;
-
   selectedChatName = name || "";
-selectedChatAssigned = assigned || "";
-selectedChatStatus = status || "";
-  
-  document.getElementById("sendResult").textContent = "";
-const meta = document.getElementById("selectedChatMeta");
-meta.innerHTML =
-  '<div><strong>' + (name || "Customer") + '</strong> (' + waId + ')</div>' +
-  '<div style="font-size:12px;color:#666;margin-top:4px;">Status: ' + (status || "") + ' | Assigned: ' + (assigned || "Unassigned") + '</div>';
-  const r = await fetch("/admin/conversations/" + waId + "/messages");
+  selectedChatAssigned = assigned || "";
+  selectedChatStatus = status || "";
+
+  const meta = document.getElementById("selectedChatMeta");
+  meta.innerHTML =
+    '<div><strong>' + escapeHtml(name || "Customer") + '</strong> (' + escapeHtml(waId) + ')</div>' +
+    '<div class="statusBar">' +
+      '<span class="pill">Status: ' + escapeHtml(status || "") + '</span>' +
+      '<span class="pill">Assigned: ' + escapeHtml(assigned || "Unassigned") + '</span>' +
+    '</div>' +
+    '<div class="actionRow">' +
+      '<button type="button" id="assignBtn">Assign</button>' +
+      '<button type="button" id="unassignBtn">Unassign</button>' +
+      '<button type="button" id="closeBtn">Close</button>' +
+    '</div>';
+
+  document.getElementById("assignBtn").onclick = assignChat;
+  document.getElementById("unassignBtn").onclick = unassignChat;
+  document.getElementById("closeBtn").onclick = closeChat;
+
+  const r = await fetch("/admin/conversations/" + encodeURIComponent(waId) + "/messages");
   const data = await r.json().catch(function(){ return {}; });
+
   const out = document.getElementById("msgsOut");
+  const oldScrollTop = out.scrollTop;
+  const oldScrollHeight = out.scrollHeight;
 
-if (!data.ok || !data.messages) {
-  out.textContent = "No messages";
-  return;
-}
-
-out.innerHTML = data.messages.map(function(m){
-  let who = "Bot";
-
-  if (m.direction === "in") {
-    who = "Customer";
-  } else if (m.meta && m.meta.byAdminId) {
-    who = "Admin";
+  if (!data.ok || !data.messages) {
+    out.textContent = "No messages";
+    return;
   }
 
-  const bg = m.direction === "in" ? "#ffffff" : "#e9f3ff";
-const align = m.direction === "in" ? "0 auto 10px 0" : "0 0 10px auto";
+  out.innerHTML = data.messages.map(function(m) {
+    let who = "Bot";
+    if (m.direction === "in") {
+      who = "Customer";
+    } else if (m.meta && m.meta.byAdminId) {
+      who = "Admin";
+    }
 
-const timeText = new Date(m.createdAt).toLocaleString();
+    const rowClass = m.direction === "in" ? "msgRowIn" : "msgRowOut";
+    const bubbleClass = m.direction === "in" ? "msgBubble msgIn" : "msgBubble msgOut";
+    const timeText = m.createdAt ? new Date(m.createdAt).toLocaleString() : "";
 
-return '<div style="margin:' + align + ';padding:10px;border-radius:10px;background:' + bg + ';border:1px solid #ddd;max-width:80%;">'
-  + '<div style="font-size:12px;color:#666;margin-bottom:4px;"><strong>' + who + '</strong></div>'
-  + '<div>' + (m.text || "") + '</div>'
-  + '<div style="font-size:11px;color:#999;margin-top:6px;">' + timeText + '</div>'
-  + '</div>';
-}).join("");
-out.scrollTop = out.scrollHeight;
+    return '' +
+      '<div class="' + rowClass + '">' +
+        '<div class="' + bubbleClass + '">' +
+          '<div style="font-size:12px;color:#666;margin-bottom:4px;"><strong>' + escapeHtml(who) + '</strong></div>' +
+          '<div>' + escapeHtml(m.text || "") + '</div>' +
+          '<div style="font-size:11px;color:#999;margin-top:6px;">' + escapeHtml(timeText) + '</div>' +
+        '</div>' +
+      '</div>';
+  }).join("");
+
+  if (preserveScroll) {
+    const newScrollHeight = out.scrollHeight;
+    out.scrollTop = oldScrollTop + (newScrollHeight - oldScrollHeight);
+  } else {
+    out.scrollTop = out.scrollHeight;
+  }
+
+  loadInbox();
 }
 
-document.getElementById("refreshInbox").addEventListener("click", loadInbox);
+async function assignChat() {
+  if (!selectedWaId) return;
 
+  const r = await fetch("/admin/conversations/" + encodeURIComponent(selectedWaId) + "/assign", {
+    method: "POST"
+  });
+  const data = await r.json().catch(function(){ return {}; });
 
+  if (!r.ok || !data.ok) {
+    document.getElementById("sendResult").textContent = JSON.stringify(data, null, 2);
+    return;
+  }
 
-document.getElementById("sendBtn").addEventListener("click", async function(){
+  const assignedName =
+    data.convo && data.convo.assignedTo && data.convo.assignedTo.name
+      ? data.convo.assignedTo.name
+      : "Unassigned";
+
+  selectedChatAssigned = assignedName;
+  selectedChatStatus = data.convo && data.convo.status ? data.convo.status : selectedChatStatus;
+
+  await loadInbox();
+  await selectChat(selectedWaId, selectedChatName, selectedChatAssigned, selectedChatStatus, true);
+}
+
+async function unassignChat() {
+  if (!selectedWaId) return;
+
+  const r = await fetch("/admin/conversations/" + encodeURIComponent(selectedWaId) + "/unassign", {
+    method: "POST"
+  });
+  const data = await r.json().catch(function(){ return {}; });
+
+  if (!r.ok || !data.ok) {
+    document.getElementById("sendResult").textContent = JSON.stringify(data, null, 2);
+    return;
+  }
+
+  selectedChatAssigned = "Unassigned";
+  selectedChatStatus = "open";
+
+  await loadInbox();
+  await selectChat(selectedWaId, selectedChatName, selectedChatAssigned, selectedChatStatus, true);
+}
+
+async function closeChat() {
+  if (!selectedWaId) return;
+
+  const r = await fetch("/admin/conversations/" + encodeURIComponent(selectedWaId) + "/close", {
+    method: "POST"
+  });
+  const data = await r.json().catch(function(){ return {}; });
+
+  if (!r.ok || !data.ok) {
+    document.getElementById("sendResult").textContent = JSON.stringify(data, null, 2);
+    return;
+  }
+
+  selectedWaId = null;
+  selectedChatName = "";
+  selectedChatAssigned = "";
+  selectedChatStatus = "";
+
+  document.getElementById("selectedChatMeta").textContent = "No chat selected";
+  document.getElementById("msgsOut").textContent = "";
+  document.getElementById("sendResult").textContent = "";
+
+  await loadInbox();
+}
+
+async function refreshSelectedChatSilently() {
+  if (!selectedWaId) return;
+  await selectChat(selectedWaId, selectedChatName, selectedChatAssigned, selectedChatStatus, true);
+}
+
+function startAutoRefresh() {
+  if (inboxTimer) clearInterval(inboxTimer);
+  inboxTimer = setInterval(function() {
+    loadInbox();
+  }, 5000);
+
+  if (chatTimer) clearInterval(chatTimer);
+  chatTimer = setInterval(function() {
+    refreshSelectedChatSilently();
+  }, 3000);
+}
+
+document.getElementById("refreshInbox").addEventListener("click", function() {
+  loadInbox();
+});
+
+document.getElementById("sendBtn").addEventListener("click", async function() {
   if (!selectedWaId) {
     document.getElementById("sendResult").textContent = "Select a chat first.";
     return;
@@ -342,7 +475,7 @@ document.getElementById("sendBtn").addEventListener("click", async function(){
     return;
   }
 
-  const r = await fetch("/admin/conversations/" + selectedWaId + "/messages", {
+  const r = await fetch("/admin/conversations/" + encodeURIComponent(selectedWaId) + "/messages", {
     method: "POST",
     headers: {"Content-Type":"application/json"},
     body: JSON.stringify({ text: text })
@@ -353,18 +486,18 @@ document.getElementById("sendBtn").addEventListener("click", async function(){
 
   if (r.ok && data.ok) {
     document.getElementById("sendText").value = "";
-    selectChat(selectedWaId, selectedChatName, selectedChatAssigned, selectedChatStatus);
-    loadInbox();
+    await selectChat(selectedWaId, selectedChatName, selectedChatAssigned, selectedChatStatus, false);
+    await loadInbox();
   }
 });
 
-document.getElementById("logout").addEventListener("click", async function(){
-  await fetch("/admin/auth/logout", { method:"POST" });
+document.getElementById("logout").addEventListener("click", async function() {
+  await fetch("/admin/auth/logout", { method: "POST" });
   window.location.href = "/admin";
 });
 
-
 loadInbox();
+startAutoRefresh();
 </script>
 
 </body>
@@ -390,7 +523,6 @@ app.get("/webhook", (req, res) => {
 // Webhook Receive (POST)
 // -------------------------
 app.post("/webhook", async (req, res) => {
-  // Ack fast
   res.sendStatus(200);
 
   try {
@@ -405,8 +537,8 @@ app.post("/webhook", async (req, res) => {
     if (!messages || messages.length === 0) return;
 
     const msg = messages[0];
-    const waId = msg.from; // digits
-    const phoneE164 = waId.startsWith("+") ? waId : `+${waId}`;
+    const waId = msg.from;
+    const phoneE164 = waId.startsWith("+") ? waId : "+" + waId;
 
     const text = msg.text?.body || "";
     const interactive =
@@ -418,14 +550,14 @@ app.post("/webhook", async (req, res) => {
 
     const preview =
       text?.slice(0, 120) ||
-      (interactive?.button_reply?.title?.slice(0, 120)) ||
-      (interactive?.list_reply?.title?.slice(0, 120)) ||
+      interactive?.button_reply?.title?.slice(0, 120) ||
+      interactive?.list_reply?.title?.slice(0, 120) ||
       "[interactive]";
 
     await Conversation.updateOne(
-      { waId },
+      { waId: waId },
       {
-        $setOnInsert: { waId },
+        $setOnInsert: { waId: waId },
         $set: { lastMessageAt: new Date(), lastMessagePreview: preview }
       },
       { upsert: true }
@@ -441,7 +573,6 @@ app.post("/webhook", async (req, res) => {
 // Admin Auth + Setup
 // -------------------------
 
-// One-time setup to create FIRST admin (recommended)
 app.post("/admin/setup", async (req, res) => {
   try {
     if (!ADMIN_SETUP_KEY) {
@@ -466,12 +597,15 @@ app.post("/admin/setup", async (req, res) => {
     const admin = await AdminUser.create({
       name: name || "Admin",
       email: email.toLowerCase(),
-      passwordHash,
+      passwordHash: passwordHash,
       role: "manager",
       active: true
     });
 
-    return res.json({ ok: true, admin: { id: admin._id, email: admin.email, role: admin.role } });
+    return res.json({
+      ok: true,
+      admin: { id: admin._id, email: admin.email, role: admin.role }
+    });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
@@ -503,31 +637,37 @@ app.post("/admin/auth/login", async (req, res) => {
 });
 
 app.post("/admin/auth/logout", (req, res) => {
-  // clear with same options footprint
-  res.clearCookie("admin_token", { httpOnly: true, sameSite: "lax", secure: isProd });
+  res.clearCookie("admin_token", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: isProd
+  });
   res.json({ ok: true });
 });
 
 app.get("/admin/me", requireAdmin, async (req, res) => {
   const admin = await AdminUser.findById(req.admin.id).lean();
   if (!admin) return res.status(401).json({ ok: false, error: "Not found" });
-  res.json({ ok: true, admin: { id: admin._id, email: admin.email, role: admin.role, name: admin.name } });
+
+  res.json({
+    ok: true,
+    admin: { id: admin._id, email: admin.email, role: admin.role, name: admin.name }
+  });
 });
 
 // -------------------------
 // Handoff Mode + Inbox APIs
 // -------------------------
 
-// Enable handoff mode for a conversation
 app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res) => {
   try {
     const waId = (req.params.waId || "").trim();
     if (!waId) return res.status(400).json({ ok: false, error: "waId required" });
 
     const convo = await Conversation.findOneAndUpdate(
-      { waId },
+      { waId: waId },
       {
-        $setOnInsert: { waId },
+        $setOnInsert: { waId: waId },
         $set: {
           handoffMode: true,
           status: "open",
@@ -538,16 +678,15 @@ app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res)
       { upsert: true, new: true }
     ).lean();
 
-    return res.json({ ok: true, convo });
+    return res.json({ ok: true, convo: convo });
   } catch (e) {
     console.error("❌ handoff/on error:", e?.message || e);
     return res.status(500).json({ ok: false, error: e?.message || "Server error" });
   }
 });
 
-// List handoff conversations
 app.get("/admin/inbox", requireAdmin, async (req, res) => {
-  const status = req.query.status; // open|assigned|closed
+  const status = req.query.status;
   const q = { handoffMode: true };
   if (status) q.status = status;
 
@@ -557,7 +696,7 @@ app.get("/admin/inbox", requireAdmin, async (req, res) => {
     .populate("assignedTo", "name email role")
     .lean();
 
-  res.json({ ok: true, convos });
+  res.json({ ok: true, convos: convos });
 });
 
 app.get("/admin/inbox/full", requireAdmin, async (req, res) => {
@@ -571,14 +710,14 @@ app.get("/admin/inbox/full", requireAdmin, async (req, res) => {
     .populate("assignedTo", "name email role")
     .lean();
 
-  const waIds = convos.map(function(c){ return c.waId; });
+  const waIds = convos.map(function(c) { return c.waId; });
   const contacts = await Contact.find({ waId: { $in: waIds } }).lean();
 
   const contactMap = new Map(
-    contacts.map(function(c){ return [c.waId, c]; })
+    contacts.map(function(c) { return [c.waId, c]; })
   );
 
-  const rows = convos.map(function(c){
+  const rows = convos.map(function(c) {
     return {
       ...c,
       contact: contactMap.get(c.waId) || null
@@ -588,15 +727,17 @@ app.get("/admin/inbox/full", requireAdmin, async (req, res) => {
   res.json({ ok: true, convos: rows });
 });
 
-// Take/assign a chat (anti-collision)
 app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
   const updated = await Conversation.findOneAndUpdate(
     {
-      waId,
+      waId: waId,
       handoffMode: true,
-      $or: [{ assignedTo: null }, { assignedTo: new mongoose.Types.ObjectId(req.admin.id) }]
+      $or: [
+        { assignedTo: null },
+        { assignedTo: new mongoose.Types.ObjectId(req.admin.id) }
+      ]
     },
     {
       $set: {
@@ -615,15 +756,15 @@ app.post("/admin/conversations/:waId/assign", requireAdmin, async (req, res) => 
   res.json({ ok: true, convo: updated });
 });
 
-// Release a chat
 app.post("/admin/conversations/:waId/unassign", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
-  const convo = await Conversation.findOne({ waId, handoffMode: true });
+  const convo = await Conversation.findOne({ waId: waId, handoffMode: true });
   if (!convo) return res.status(404).json({ ok: false, error: "Not found" });
 
   const isAssignee = convo.assignedTo?.toString() === req.admin.id;
   const isManager = req.admin.role === "manager";
+
   if (!isAssignee && !isManager) {
     return res.status(403).json({ ok: false, error: "Not allowed" });
   }
@@ -636,15 +777,15 @@ app.post("/admin/conversations/:waId/unassign", requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
-// Close chat (end handoff)
 app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
 
-  const convo = await Conversation.findOne({ waId });
+  const convo = await Conversation.findOne({ waId: waId });
   if (!convo) return res.status(404).json({ ok: false, error: "Not found" });
 
   const isAssignee = convo.assignedTo?.toString() === req.admin.id;
   const isManager = req.admin.role === "manager";
+
   if (!isAssignee && !isManager) {
     return res.status(403).json({ ok: false, error: "Not allowed" });
   }
@@ -659,14 +800,12 @@ app.post("/admin/conversations/:waId/close", requireAdmin, async (req, res) => {
   res.json({ ok: true });
 });
 
-// Get messages
 app.get("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
-  const logs = await MessageLog.find({ waId }).sort({ createdAt: 1 }).limit(500).lean();
+  const logs = await MessageLog.find({ waId: waId }).sort({ createdAt: 1 }).limit(500).lean();
   res.json({ ok: true, messages: logs });
 });
 
-// Send message as admin (WhatsApp + DB)
 app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) => {
   const waId = req.params.waId;
   const { text } = req.body || {};
@@ -675,7 +814,7 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
     return res.status(400).json({ ok: false, error: "text required" });
   }
 
-  const convo = await Conversation.findOne({ waId });
+  const convo = await Conversation.findOne({ waId: waId });
   if (!convo) return res.status(404).json({ ok: false, error: "Conversation not found" });
 
   if (!convo.handoffMode) {
@@ -689,19 +828,16 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
     return res.status(409).json({ ok: false, error: "Chat assigned to another admin" });
   }
 
-  // If unassigned, auto-assign to sender
   if (!convo.assignedTo) {
     convo.assignedTo = new mongoose.Types.ObjectId(req.admin.id);
     convo.assignedAt = new Date();
     convo.status = "assigned";
   }
 
-  // Send WhatsApp
   const waRes = await sendText(waId, text.trim());
 
-  // Save message log
   await MessageLog.create({
-    waId,
+    waId: waId,
     direction: "out",
     type: "text",
     text: text.trim(),
@@ -716,7 +852,7 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
 });
 
 // -------------------------
-// Existing simple admin endpoints (keep)
+// Existing simple admin endpoints
 // -------------------------
 
 app.get("/admin/trials", requireAdmin, async (req, res) => {
@@ -729,22 +865,21 @@ app.get("/admin/contacts", requireAdmin, async (req, res) => {
   res.json(contacts);
 });
 
-app.post("/admin/trials/:id/status", requireAdmin, async (req,res) => {
+app.post("/admin/trials/:id/status", requireAdmin, async (req, res) => {
   const { status } = req.body || {};
-  const allowed = ["booked","attended","no_show","cancelled"];
+  const allowed = ["booked", "attended", "no_show", "cancelled"];
 
-  if(!allowed.includes(status)) {
-    return res.status(400).json({ok: false, error: "Invalid status" });
-    }
-  
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ ok: false, error: "Invalid status" });
+  }
+
   const trial = await Trial.findByIdAndUpdate(
     req.params.id,
-    { $set: { status } },
-    { new: true },
+    { $set: { status: status } },
+    { new: true }
   );
 
-  res.json({ ok: true, trial});
-
+  res.json({ ok: true, trial: trial });
 });
 
-app.listen(PORT, () => console.log(`✅ Server listening on port ${PORT}`));
+app.listen(PORT, () => console.log(\`✅ Server listening on port \${PORT}\`));
