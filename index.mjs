@@ -311,6 +311,7 @@ return '<div style="margin:' + align + ';padding:10px;border-radius:10px;backgro
 + '<div>' + (m.text || "") + '</div>'
     + '</div>';
 }).join("");
+out.scrollTop = out.scrollHeight;
 }
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
