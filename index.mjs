@@ -210,23 +210,31 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     <div class="small">Tip: after enabling, click “Refresh Inbox”.</div>
   </div>
 
-  <div class="card">
-    <h3>Inbox</h3>
-    <button id="refreshInbox">Refresh Inbox</button>
-    <div id="inboxList" style="margin-top:12px"></div>
+  <div class="card" style="padding:0;border:none;">
+    <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+      
+      <div class="card" style="flex:1;min-width:280px;">
+        <h3>Inbox</h3>
+        <button id="refreshInbox">Refresh Inbox</button>
+        <div id="inboxList" style="margin-top:12px"></div>
+      </div>
 
-    <h4 style="margin-top:16px">Selected Chat</h4>
-    <div>waId: <span id="selectedWaId">-</span></div>
+      <div class="card" style="flex:2;min-width:320px;">
+        <h3>Selected Chat</h3>
+        <div>waId: <span id="selectedWaId">-</span></div>
 
-    <div style="margin-top:12px">
-      <h4>Send message</h4>
-      <textarea id="sendText" placeholder="Type message to send..."></textarea>
-      <button id="sendBtn" style="margin-top:8px">Send</button>
-      <pre id="sendResult"></pre>
+        <h4 style="margin-top:16px">Messages</h4>
+        <div id="msgsOut" style="background:#f6f6f6;padding:12px;border-radius:12px;min-height:320px;max-height:500px;overflow:auto"></div>
+
+        <div style="margin-top:12px">
+          <h4>Send message</h4>
+          <textarea id="sendText" placeholder="Type message to send..."></textarea>
+          <button id="sendBtn" style="margin-top:8px">Send</button>
+          <pre id="sendResult"></pre>
+        </div>
+      </div>
+
     </div>
-
-    <h4 style="margin-top:16px">Messages</h4>
-    <div id="msgsOut" style="background:#f6f6f6;padding:12px;border-radius:12px;min-height:120px"></div>
   </div>
 
   <div class="card">
