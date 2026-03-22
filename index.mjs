@@ -187,7 +187,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 <body>
 
   <div class="top">
-    <h2>Admin Dashboard (MVP)</h2>
+    <h2>Structure GYM - Admin Panel Page</h2>
     <button id="logout">Logout</button>
   </div>
 
@@ -229,11 +229,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     </div>
   </div>
 
-  <div class="card">
-    <h3>Session check</h3>
-    <div id="status">Loading...</div>
-    <pre id="out"></pre>
-  </div>
+
 
 <script>
 let selectedWaId = null;
