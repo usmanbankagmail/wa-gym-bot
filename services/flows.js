@@ -73,13 +73,19 @@ async function disableHandoff(convo) {
 
 export async function handleInbound({ waId, phoneE164, text, interactive }) {
   // Log inbound
-  await MessageLog.create({
-    waId,
-    direction: "in",
-    type: interactive ? "interactive" : "text",
-    text: text || "",
-    meta: interactive || {}
-  });
+  const inboundText =
+  text ||
+  interactive?.button_reply?.title ||
+  interactive?.list_reply?.title ||
+  "";
+
+await MessageLog.create({
+  waId,
+  direction: "in",
+  type: interactive ? "interactive" : "text",
+  text: inboundText,
+  meta: interactive || {}
+});
 
   // Upsert contact
   const contact = await Contact.findOneAndUpdate(
@@ -204,11 +210,18 @@ async function sendMainMenu(waId) {
   await sendText(waId, "Need help? Reply *AGENT* to talk to a representative.");
 
   await MessageLog.create({
-    waId,
-    direction: "out",
-    type: "interactive",
-    text: "Main menu"
-  });
+  waId,
+  direction: "out",
+  type: "interactive",
+  text: body + "\n\nNeed help? Reply *AGENT* to talk to a representative.",
+  meta: {
+    buttons: [
+      "💰 Membership Pricing",
+      "🆓 Book Free Trial",
+      "📍 Location & Timings"
+    ]
+  }
+});
 }
 
 async function handleIdle({ waId, convo, buttonId, incomingText }) {
@@ -225,7 +238,12 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
       { id: "GOAL_GENERAL", title: "General Fitness" }
     ]);
 
-    await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Ask goal" });
+    await MessageLog.create({
+  waId,
+  direction: "out",
+  type: "text",
+  text: pricingText + "\n\nInterested? Reply *TRIAL* to book a free trial or *AGENT* to talk to a representative."
+});
     return;
   }
 
@@ -235,7 +253,12 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
     await convo.save();
 
     await sendText(waId, "Great! Free trial book karte hain ✅\nAap ka *name* kya hai?");
-    await MessageLog.create({ waId, direction: "out", type: "text", text: "Ask name" });
+    await MessageLog.create({
+  waId,
+  direction: "out",
+  type: "text",
+  text: "Great! Free trial book karte hain ✅\nAap ka *name* kya hai?"
+});
     return;
   }
 
@@ -313,7 +336,12 @@ async function handleTrialName({ waId, convo, contact, incomingText }) {
     { id: "DAY_MANUAL", title: "Choose date" }
   ]);
 
-  await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Ask day" });
+  await MessageLog.create({
+  waId,
+  direction: "out",
+  type: "text",
+  text: "Great! Free trial book karte hain ✅\nAap ka *name* kya hai?"
+});
 }
 
 async function handleTrialDay({ waId, convo, buttonId, incomingText }) {
@@ -342,7 +370,12 @@ async function handleTrialDay({ waId, convo, buttonId, incomingText }) {
     { id: "TIME_MANUAL", title: "Specific time" }
   ]);
 
-  await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Ask time" });
+  await MessageLog.create({
+  waId,
+  direction: "out",
+  type: "text",
+  text: "Perfect 👍\nAap kis *time* aana chahte hain? (e.g. 7 PM)"
+});
 }
 
 async function handleTrialTime({ waId, convo, buttonId, incomingText }) {
@@ -375,7 +408,17 @@ async function handleTrialTime({ waId, convo, buttonId, incomingText }) {
     ]
   );
 
-  await MessageLog.create({ waId, direction: "out", type: "interactive", text: "Confirm trial" });
+  await MessageLog.create({
+  waId,
+  direction: "out",
+  type: "text",
+  text:
+    "Please confirm your free trial booking:\n" +
+    "Name: " + convo.trialDraft.name + "\n" +
+    "Day: " + convo.trialDraft.day + "\n" +
+    "Time: " + convo.trialDraft.time + "\n\n" +
+    "Reply *YES* to confirm or *NO* to cancel."
+});
 }
 
 async function handleTrialConfirm({ waId, convo, contact, buttonId, incomingText }) {
@@ -415,5 +458,15 @@ async function handleTrialConfirm({ waId, convo, contact, buttonId, incomingText
     `✅ Trial booked!\n\nName: ${name}\nDay: ${day}\nTime: ${timeSlot}\n\nPlease 10 min pehle aa jayein. Reply *MENU* for options.`
   );
 
-  await MessageLog.create({ waId, direction: "out", type: "text", text: "Trial booked confirmation" });
+  await MessageLog.create({
+  waId,
+  direction: "out",
+  type: "text",
+  text:
+    "Your free trial is booked ✅\n" +
+    "Name: " + convo.trialDraft.name + "\n" +
+    "Day: " + convo.trialDraft.day + "\n" +
+    "Time: " + convo.trialDraft.time + "\n\n" +
+    "Please arrive 10 minutes early. Reply *AGENT* if you need help."
+});
 }
