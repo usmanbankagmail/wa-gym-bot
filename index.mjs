@@ -200,15 +200,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     </div>
   </div>
 
-  <div class="card">
-    <h3>Enable Handoff (Test Tool)</h3>
-    <div class="row">
-      <input id="waid" placeholder="Enter waId (e.g. 923322377663)" />
-      <button id="handoffBtn" style="flex:0 0 auto">Enable Handoff</button>
-    </div>
-    <pre id="handoffResult"></pre>
-    <div class="small">Tip: after enabling, click “Refresh Inbox”.</div>
-  </div>
+
 
   <div class="card" style="padding:0;border:none;">
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
@@ -221,7 +213,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 
       <div class="card" style="flex:2;min-width:320px;">
         <h3>Selected Chat</h3>
-        <div>waId: <span id="selectedWaId">-</span></div>
+        <div id="selectedChatMeta" style="margin-top:8px;color:#555;">No chat selected</div>
 
         <h4 style="margin-top:16px">Messages</h4>
         <div id="msgsOut" style="background:#f6f6f6;padding:12px;border-radius:12px;min-height:320px;max-height:500px;overflow:auto"></div>
