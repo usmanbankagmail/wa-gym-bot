@@ -161,7 +161,7 @@ await MessageLog.create({
       waId,
       direction: "out",
       type: "text",
-      text: "Handoff enabled"
+      text: "You are now connected to a representative. Please wait for a reply."
     });
     return;
   }
@@ -241,8 +241,15 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
     await MessageLog.create({
   waId,
   direction: "out",
-  type: "text",
-  text: pricingText + "\n\nInterested? Reply *TRIAL* to book a free trial or *AGENT* to talk to a representative."
+  type: "interactive",
+  text: "Aap ka goal kya hai? (Choose one)",
+  meta: {
+    buttons: [
+      "Weight Loss",
+      "Muscle Gain",
+      "General Fitness"
+    ]
+  }
 });
     return;
   }
@@ -267,7 +274,7 @@ async function handleIdle({ waId, convo, buttonId, incomingText }) {
       waId,
       "📍 Location: (your address here)\n🕒 Timings:\nMorning: 6am–11am\nEvening: 4pm–11pm\n\nReply *TRIAL* to book a free trial."
     );
-    await MessageLog.create({ waId, direction: "out", type: "text", text: "Location & timings" });
+    await MessageLog.create({ waId, direction: "out", type: "text",  text: "📍 Location: (your address here)\n🕒 Timings: (your timings here)\n\nReply *TRIAL* to book a free trial or *AGENT* to talk to a representative." });
     return;
   }
 
@@ -310,7 +317,7 @@ async function handlePricingGoal({ waId, convo, buttonId, incomingText }) {
     waId,
     direction: "out",
     type: "interactive",
-    text: "Pricing result + upsell"
+    text: msg
   });
 }
 
@@ -339,8 +346,15 @@ async function handleTrialName({ waId, convo, contact, incomingText }) {
   await MessageLog.create({
   waId,
   direction: "out",
-  type: "text",
-  text: "Great! Free trial book karte hain ✅\nAap ka *name* kya hai?"
+  type: "interactive",
+  text: "Trial kis din chahiye?",
+  meta: {
+    buttons: [
+      "Today",
+      "Tomorrow",
+      "Choose date"
+    ]
+  }
 });
 }
 
@@ -373,8 +387,15 @@ async function handleTrialDay({ waId, convo, buttonId, incomingText }) {
   await MessageLog.create({
   waId,
   direction: "out",
-  type: "text",
-  text: "Perfect 👍\nAap kis *time* aana chahte hain? (e.g. 7 PM)"
+  type: "interactive",
+  text: "Time slot choose karein:",
+  meta: {
+    buttons: [
+      "Morning (6–11)",
+      "Evening (4–11)",
+      "Specific time"
+    ]
+  }
 });
 }
 
@@ -414,9 +435,9 @@ async function handleTrialTime({ waId, convo, buttonId, incomingText }) {
   type: "text",
   text:
     "Please confirm your free trial booking:\n" +
-    "Name: " + convo.trialDraft.name + "\n" +
-    "Day: " + convo.trialDraft.day + "\n" +
-    "Time: " + convo.trialDraft.time + "\n\n" +
+    "Name: " + convo.context.trialName + "\n" +
+"Day: " + convo.context.trialDay + "\n" +
+"Time: " + convo.context.trialTimeSlot + "\n\n" +
     "Reply *YES* to confirm or *NO* to cancel."
 });
 }
@@ -464,9 +485,9 @@ async function handleTrialConfirm({ waId, convo, contact, buttonId, incomingText
   type: "text",
   text:
     "Your free trial is booked ✅\n" +
-    "Name: " + convo.trialDraft.name + "\n" +
-    "Day: " + convo.trialDraft.day + "\n" +
-    "Time: " + convo.trialDraft.time + "\n\n" +
+    "Name: " + name + "\n" +
+"Day: " + day + "\n" +
+"Time: " + timeSlot + "\n\n" +
     "Please arrive 10 minutes early. Reply *AGENT* if you need help."
 });
 }
