@@ -307,8 +307,8 @@ out.innerHTML = data.messages.map(function(m){
 const align = m.direction === "in" ? "0 auto 10px 0" : "0 0 10px auto";
 
 return '<div style="margin:' + align + ';padding:10px;border-radius:10px;background:' + bg + ';border:1px solid #ddd;max-width:80%;">'
-    + '<strong>' + who + ':</strong><br>'
-    + (m.text || "")
+    + '<div style="font-size:12px;color:#666;margin-bottom:4px;"><strong>' + who + '</strong></div>'
++ '<div>' + (m.text || "") + '</div>'
     + '</div>';
 }).join("");
 }
