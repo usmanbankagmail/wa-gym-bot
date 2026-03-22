@@ -291,7 +291,13 @@ async function loadInbox() {
     const preview = c.lastMessagePreview || "";
     const status = c.status || "";
 
-    b.className = "chatBtn" + (selectedWaId === c.waId ? " active" : "");
+    if (selectedWaId === c.waId) {
+  b.className = "chatBtn active";
+} else {
+  b.className = "chatBtn";
+}
+
+
     b.innerHTML =
       '<div><strong>' + escapeHtml(name) + '</strong></div>' +
       '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
@@ -882,4 +888,4 @@ app.post("/admin/trials/:id/status", requireAdmin, async (req, res) => {
   res.json({ ok: true, trial: trial });
 });
 
-app.listen(PORT, () => console.log(\`✅ Server listening on port \${PORT}\`));
+app.listen(PORT, () => console.log(`✅ Server listening on port ${PORT}`));
