@@ -269,12 +269,20 @@ async function loadInbox(){
     const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
     const assigned = (c.assignedTo && c.assignedTo.name) ? c.assignedTo.name : "Unassigned";
 
-b.textContent = name + " | " + assigned + " | " + (c.status || "") + " | " + (c.lastMessagePreview || "");
+b.innerHTML =
+  '<div><strong>' + name + '</strong></div>' +
+  '<div style="font-size:12px;color:#666;">Last: ' + (c.lastMessagePreview || "") + '</div>' +
+  '<div style="font-size:12px;color:#999;">Status: ' + (c.status || "") + ' | Assigned: ' + assigned + '</div>';
+
     b.style.display = "block";
     b.style.width = "100%";
 b.style.textAlign = "left";
 b.style.whiteSpace = "normal";
     b.style.marginTop = "8px";
+    b.style.padding = "12px";
+b.style.border = "1px solid #ddd";
+b.style.borderRadius = "12px";
+b.style.background = "#fff";
     b.addEventListener("click", function(){ selectChat(c.waId); });
     list.appendChild(b);
   });
