@@ -234,14 +234,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 <script>
 let selectedWaId = null;
 
-async function loadMe(){
-  const r = await fetch("/admin/me");
-  const data = await r.json().catch(function(){ return {}; });
-  document.getElementById("out").textContent = JSON.stringify(data, null, 2);
-  document.getElementById("status").textContent =
-    (r.ok && data.ok) ? ("Logged in as: " + data.admin.email + " (" + data.admin.role + ")")
-                      : ("NOT logged in (" + r.status + "): " + (data.error || ""));
-}
+
 
 async function loadInbox(){
   const r = await fetch("/admin/inbox/full");
@@ -322,20 +315,7 @@ out.scrollTop = out.scrollHeight;
 
 document.getElementById("refreshInbox").addEventListener("click", loadInbox);
 
-document.getElementById("handoffBtn").addEventListener("click", async function(){
-  const waId = document.getElementById("waid").value.trim();
 
-  if (!waId) {
-    document.getElementById("handoffResult").textContent = "waId is required";
-    return;
-  }
-
-  const r = await fetch("/admin/conversations/" + waId + "/handoff/on", { method: "POST" });
-  const data = await r.json().catch(function(){ return {}; });
-  document.getElementById("handoffResult").textContent = JSON.stringify(data, null, 2);
-
-  loadInbox();
-});
 
 document.getElementById("sendBtn").addEventListener("click", async function(){
   if (!selectedWaId) {
