@@ -283,6 +283,8 @@ b.style.whiteSpace = "normal";
 b.style.border = "1px solid #ddd";
 b.style.borderRadius = "12px";
 b.style.background = "#fff";
+b.onmouseover = function(){ b.style.background = "#f0f7ff"; };
+b.onmouseout = function(){ b.style.background = "#fff"; };
     b.addEventListener("click", function(){ selectChat(c.waId); });
     list.appendChild(b);
   });
