@@ -572,7 +572,12 @@ document.getElementById("generateReportBtn").addEventListener("click", async fun
 
   const data = await r.json().catch(function(){ return {}; });
 
+  if (data.transcript) {
+  document.getElementById("reportOutput").textContent =
+    "Total Messages: " + data.totalMessages + "\n\n" + data.transcript;
+} else {
   document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
+}
 });
 
 document.getElementById("sendBtn").addEventListener("click", async function() {
@@ -1009,16 +1014,22 @@ const messages = await MessageLog.find(query)
   .lean();
 
 // Prepare simple preview
-const preview = messages.map(m => ({
-  time: m.createdAt,
-  direction: m.direction,
-  text: m.text
-}));
+const transcript = messages.map(function(m) {
+  let sender = "Bot";
+
+  if (m.direction === "in") {
+    sender = "Customer";
+  } else if (m.meta && m.meta.byAdminId) {
+    sender = "Admin";
+  }
+
+  return sender + ": " + (m.text || "");
+}).join("\n");
 
 return res.json({
   ok: true,
   totalMessages: messages.length,
-  preview: preview.slice(0, 100000)
+  transcript: transcript
 });
   } catch (e) {
     return res.status(500).json({
