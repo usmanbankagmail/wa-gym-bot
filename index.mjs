@@ -225,6 +225,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
       
       <div class="card" style="flex:1;min-width:300px;">
         <h3>Inbox</h3>
+        <div id="inboxCount" class="small">Handoff chats: 0</div>
         <div class="actionRow">
           <button id="refreshInbox">Refresh Inbox</button>
         </div>
@@ -272,6 +273,7 @@ async function loadInbox() {
   const data = await r.json().catch(function(){ return {}; });
 
   const list = document.getElementById("inboxList");
+  const inboxCount = document.getElementById("inboxCount");
   list.innerHTML = "";
 
   if (!r.ok || !data.ok) {
@@ -280,10 +282,11 @@ async function loadInbox() {
   }
 
   if (!data.convos || data.convos.length === 0) {
+  inboxCount.textContent = "Handoff chats: 0";
     list.textContent = "No handoff conversations.";
     return;
   }
-
+inboxCount.textContent = "Handoff chats: " + data.convos.length;
   data.convos.forEach(function(c) {
     const b = document.createElement("button");
     const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
