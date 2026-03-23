@@ -574,7 +574,13 @@ document.getElementById("analyzeReportBtn").addEventListener("click", async func
 
   const data = await r.json().catch(function(){ return {}; });
 
+  if (data.aiText) {
+  document.getElementById("reportOutput").textContent = data.aiText;
+} else {
   document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
+}
+
+
 });
 
 document.getElementById("scopeFilter").addEventListener("change", function() {
@@ -1133,23 +1139,31 @@ return res.json({
 
 app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
   try {
-    const { contact, fromDate, toDate, scope, transcript } = req.body || {};
+    const { transcript } = req.body || {};
 
-    return res.json({
-      ok: true,
-      message: "AI analysis route not connected yet",
-      received: {
-        contact: contact || "",
-        fromDate: fromDate || "",
-        toDate: toDate || "",
-        scope: scope || "",
-        hasTranscript: !!transcript,
-        transcriptLength: transcript ? transcript.length : 0,
-        transcriptSample: transcript ? transcript.slice(0, 300) : "",
-        aiConfigured: !!GEMINI_API_KEY,
-aiModel: GEMINI_MODEL
-      }
-    });
+if (!transcript) {
+  return res.status(400).json({
+    ok: false,
+    error: "No transcript provided"
+  });
+}
+
+const geminiResponse = await callGeminiForReport(transcript);
+
+// Extract text safely
+let aiText = "";
+
+try {
+  aiText =
+    geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+} catch (e) {
+  aiText = "";
+}
+
+return res.json({
+  ok: true,
+  aiText: aiText || "No response from AI"
+});
   } catch (e) {
     return res.status(500).json({
       ok: false,
