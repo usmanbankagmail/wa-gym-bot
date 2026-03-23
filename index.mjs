@@ -574,7 +574,7 @@ document.getElementById("generateReportBtn").addEventListener("click", async fun
 
   if (data.transcript) {
   document.getElementById("reportOutput").textContent =
-    "Total Messages: " + data.totalMessages + "\n\n" + data.transcript;
+    "Total Messages: " + data.totalMessages + "\\n\\n" + data.transcript;
 } else {
   document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
 }
