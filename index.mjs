@@ -309,6 +309,7 @@ let selectedWaId = null;
 let selectedChatName = "";
 let selectedChatAssigned = "";
 let selectedChatStatus = "";
+let currentReportTranscript = "";
 
 let inboxTimer = null;
 let chatTimer = null;
@@ -560,11 +561,13 @@ document.getElementById("analyzeReportBtn").addEventListener("click", async func
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contact: contact,
-      fromDate: fromDate,
-      toDate: toDate,
-      scope: scope
-    })
+  contact: contact,
+  fromDate: fromDate,
+  toDate: toDate,
+  scope: scope,
+  transcript: currentReportTranscript
+})
+
   });
 
   const data = await r.json().catch(function(){ return {}; });
@@ -603,11 +606,14 @@ document.getElementById("generateReportBtn").addEventListener("click", async fun
   const data = await r.json().catch(function(){ return {}; });
 
   if (data.transcript) {
+  currentReportTranscript = data.transcript;
   document.getElementById("reportOutput").textContent =
     "Total Messages: " + data.totalMessages + "\\n\\n" + data.transcript;
 } else {
+  currentReportTranscript = "";
   document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
 }
+
 });
 
 document.getElementById("sendBtn").addEventListener("click", async function() {
