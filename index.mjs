@@ -1005,7 +1005,7 @@ if (fromDate || toDate) {
 // Get messages from DB
 const messages = await MessageLog.find(query)
   .sort({ createdAt: 1 })
-  .limit(100)
+  .limit(10000000)
   .lean();
 
 // Prepare simple preview
@@ -1018,7 +1018,7 @@ const preview = messages.map(m => ({
 return res.json({
   ok: true,
   totalMessages: messages.length,
-  preview: preview.slice(0, 10)
+  preview: preview.slice(0, 100000)
 });
   } catch (e) {
     return res.status(500).json({
