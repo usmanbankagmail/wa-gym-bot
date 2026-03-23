@@ -314,6 +314,7 @@ if (scope === "all") {
     const preview = c.lastMessagePreview || "";
     const lastTime = c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString() : "No time";
     const status = c.status || "";
+    const waiting = c.lastMessageFrom === "customer";
 
     if (selectedWaId === c.waId) {
   b.className = "chatBtn active";
@@ -325,6 +326,7 @@ if (scope === "all") {
 b.innerHTML =
   '<div><strong>' + escapeHtml(name) + '</strong></div>' +
   '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
+  (waiting ? '<div style="color:#d93025;font-size:12px;margin-top:4px;">Customer waiting</div>' : '') +
   '<div style="font-size:12px;color:#999;margin-top:6px;">Last: ' + escapeHtml(lastTime) + '</div>' +
   '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
 
@@ -590,13 +592,17 @@ app.post("/webhook", async (req, res) => {
       "[interactive]";
 
     await Conversation.updateOne(
-      { waId: waId },
-      {
-        $setOnInsert: { waId: waId },
-        $set: { lastMessageAt: new Date(), lastMessagePreview: preview }
-      },
-      { upsert: true }
-    );
+  { waId },
+  {
+    $setOnInsert: { waId },
+    $set: {
+      lastMessageAt: new Date(),
+      lastMessagePreview: preview,
+      lastMessageFrom: "customer"
+    }
+  },
+  { upsert: true }
+);
 
     await handleInbound({ waId, phoneE164, text, interactive });
   } catch (err) {
@@ -895,6 +901,7 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
 
   convo.lastMessageAt = new Date();
   convo.lastMessagePreview = text.trim().slice(0, 120);
+  convo.lastMessageFrom = "admin";
   await convo.save();
 
   res.json({ ok: true });
