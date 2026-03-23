@@ -214,12 +214,53 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 
   <div class="card">
     <div class="links">
-      <a href="/admin/trials" target="_blank">/admin/trials</a>
-      <a href="/admin/contacts" target="_blank">/admin/contacts</a>
-      <a href="/admin/inbox" target="_blank">/admin/inbox</a>
-      <a href="/admin/me" target="_blank">/admin/me</a>
+  <a href="/admin/trials" target="_blank">Trials</a>
+  <a href="/admin/contacts" target="_blank">Contacts</a>
+  <a href="/admin/inbox" target="_blank">Inbox</a>
+  <a href="#reportsSection">Reports</a>
+  <a href="/admin/me" target="_blank">Me</a>
+</div>
+  </div>
+
+  <div class="card" id="reportsSection">
+  <h3>Reports</h3>
+  <div class="small">Generate a future AI review of chats by contact number, date range, or scope.</div>
+
+  <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:220px;">
+      <label class="small">Contact Number</label>
+      <input id="reportContact" type="text" placeholder="e.g. 923001234567" />
+    </div>
+
+    <div style="flex:1;min-width:180px;">
+      <label class="small">From Date</label>
+      <input id="reportFromDate" type="date" />
+    </div>
+
+    <div style="flex:1;min-width:180px;">
+      <label class="small">To Date</label>
+      <input id="reportToDate" type="date" />
+    </div>
+
+    <div style="flex:1;min-width:180px;">
+      <label class="small">Scope</label>
+      <select id="reportScope">
+        <option value="single">Single Contact</option>
+        <option value="all">All Chats</option>
+        <option value="date_range">Date Range</option>
+      </select>
     </div>
   </div>
+
+  <div class="actionRow" style="margin-top:16px;">
+    <button id="generateReportBtn" type="button">Generate Report</button>
+  </div>
+
+  <div style="margin-top:16px;">
+    <h4>Report Output</h4>
+    <pre id="reportOutput">No report generated yet.</pre>
+  </div>
+</div>
 
   <div class="card" style="padding:0;border:none;background:transparent;">
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
@@ -510,6 +551,25 @@ document.getElementById("refreshInbox").addEventListener("click", function() {
 
 document.getElementById("scopeFilter").addEventListener("change", function() {
   loadInbox();
+});
+
+document.getElementById("generateReportBtn").addEventListener("click", function() {
+  const contact = document.getElementById("reportContact").value.trim();
+  const fromDate = document.getElementById("reportFromDate").value;
+  const toDate = document.getElementById("reportToDate").value;
+  const scope = document.getElementById("reportScope").value;
+
+  const lines = [
+    "Report UI only",
+    "Scope: " + (scope || ""),
+    "Contact: " + (contact || "Not provided"),
+    "From Date: " + (fromDate || "Not provided"),
+    "To Date: " + (toDate || "Not provided"),
+    "",
+    "Later, this section will generate an AI-based chat review."
+  ];
+
+  document.getElementById("reportOutput").textContent = lines.join("\\n");
 });
 
 document.getElementById("sendBtn").addEventListener("click", async function() {
