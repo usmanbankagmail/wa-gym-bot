@@ -985,17 +985,41 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
 app.post("/admin/reports/preview", requireAdmin, async (req, res) => {
   try {
     const { contact, fromDate, toDate, scope } = req.body || {};
+    let query = {};
+    // Filter by contact (waId)
+if (contact) {
+  query.waId = contact;
+}
 
-    return res.json({
-      ok: true,
-      message: "Report preview route working",
-      filters: {
-        contact: contact || "",
-        fromDate: fromDate || "",
-        toDate: toDate || "",
-        scope: scope || ""
-      }
-    });
+// Filter by date
+if (fromDate || toDate) {
+  query.createdAt = {};
+  if (fromDate) {
+    query.createdAt.$gte = new Date(fromDate);
+  }
+  if (toDate) {
+    query.createdAt.$lte = new Date(toDate);
+  }
+}
+
+// Get messages from DB
+const messages = await MessageLog.find(query)
+  .sort({ createdAt: 1 })
+  .limit(100)
+  .lean();
+
+// Prepare simple preview
+const preview = messages.map(m => ({
+  time: m.createdAt,
+  direction: m.direction,
+  text: m.text
+}));
+
+return res.json({
+  ok: true,
+  totalMessages: messages.length,
+  preview: preview.slice(0, 10)
+});
   } catch (e) {
     return res.status(500).json({
       ok: false,
