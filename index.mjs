@@ -293,11 +293,20 @@ const r = await fetch("/admin/inbox/full?scope=" + scope);
   }
 
   if (!data.convos || data.convos.length === 0) {
-  inboxCount.textContent = "Handoff chats: 0";
+  if (scope === "all") {
+    inboxCount.textContent = "All chats: 0";
+    list.textContent = "No conversations.";
+  } else {
+    inboxCount.textContent = "Handoff chats: 0";
     list.textContent = "No handoff conversations.";
-    return;
   }
-inboxCount.textContent = "Handoff chats: " + data.convos.length;
+  return;
+}
+if (scope === "all") {
+  inboxCount.textContent = "All chats: " + data.convos.length;
+} else {
+  inboxCount.textContent = "Handoff chats: " + data.convos.length;
+}
   data.convos.forEach(function(c) {
     const b = document.createElement("button");
     const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
