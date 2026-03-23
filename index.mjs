@@ -1078,9 +1078,20 @@ return res.json({
 
 app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
   try {
+    const { contact, fromDate, toDate, scope, transcript } = req.body || {};
+
     return res.json({
       ok: true,
-      message: "AI analysis route not connected yet"
+      message: "AI analysis route not connected yet",
+      received: {
+        contact: contact || "",
+        fromDate: fromDate || "",
+        toDate: toDate || "",
+        scope: scope || "",
+        hasTranscript: !!transcript,
+        transcriptLength: transcript ? transcript.length : 0,
+        transcriptSample: transcript ? transcript.slice(0, 300) : ""
+      }
     });
   } catch (e) {
     return res.status(500).json({
