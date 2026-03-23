@@ -553,23 +553,26 @@ document.getElementById("scopeFilter").addEventListener("change", function() {
   loadInbox();
 });
 
-document.getElementById("generateReportBtn").addEventListener("click", function() {
+document.getElementById("generateReportBtn").addEventListener("click", async function() {
   const contact = document.getElementById("reportContact").value.trim();
   const fromDate = document.getElementById("reportFromDate").value;
   const toDate = document.getElementById("reportToDate").value;
   const scope = document.getElementById("reportScope").value;
 
-  const lines = [
-    "Report UI only",
-    "Scope: " + (scope || ""),
-    "Contact: " + (contact || "Not provided"),
-    "From Date: " + (fromDate || "Not provided"),
-    "To Date: " + (toDate || "Not provided"),
-    "",
-    "Later, this section will generate an AI-based chat review."
-  ];
+  const r = await fetch("/admin/reports/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contact: contact,
+      fromDate: fromDate,
+      toDate: toDate,
+      scope: scope
+    })
+  });
 
-  document.getElementById("reportOutput").textContent = lines.join("\\n");
+  const data = await r.json().catch(function(){ return {}; });
+
+  document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
 });
 
 document.getElementById("sendBtn").addEventListener("click", async function() {
@@ -978,6 +981,22 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
 
   res.json({ ok: true });
 });
+
+app.post("/admin/reports/preview", requireAdmin, async (req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      message: "Report preview route working"
+    });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: e.message
+    });
+  }
+});
+
+
 
 // -------------------------
 // Existing simple admin endpoints
