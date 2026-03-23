@@ -984,9 +984,17 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
 
 app.post("/admin/reports/preview", requireAdmin, async (req, res) => {
   try {
+    const { contact, fromDate, toDate, scope } = req.body || {};
+
     return res.json({
       ok: true,
-      message: "Report preview route working"
+      message: "Report preview route working",
+      filters: {
+        contact: contact || "",
+        fromDate: fromDate || "",
+        toDate: toDate || "",
+        scope: scope || ""
+      }
     });
   } catch (e) {
     return res.status(500).json({
@@ -995,7 +1003,6 @@ app.post("/admin/reports/preview", requireAdmin, async (req, res) => {
     });
   }
 });
-
 
 
 // -------------------------
