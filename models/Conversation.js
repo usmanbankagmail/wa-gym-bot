@@ -34,8 +34,15 @@ const ConversationSchema = new mongoose.Schema(
     assignedAt: { type: Date, default: null },
 
     // Fast inbox rendering
-    lastMessageAt: { type: Date, default: null, index: true },
-    lastMessagePreview: { type: String, default: "" }
+     lastMessageAt: { type: Date, default: null, index: true },
+lastMessagePreview: { type: String, default: "" },
+lastMessageFrom: {
+  type: String,
+  enum: ["customer", "admin", "bot"],
+  default: "customer"
+}
+
+
   },
   { timestamps: true }
 );
