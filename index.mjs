@@ -140,9 +140,7 @@ document.getElementById("f").addEventListener("submit", async function (e) {
 
   window.location.href = "/admin/app";
 });
-document.getElementById("scopeFilter").addEventListener("change", function(){
-  loadInbox();
-});
+
 </script>
 </body>
 </html>`);
@@ -484,6 +482,10 @@ function startAutoRefresh() {
 }
 
 document.getElementById("refreshInbox").addEventListener("click", function() {
+  loadInbox();
+});
+
+document.getElementById("scopeFilter").addEventListener("change", function() {
   loadInbox();
 });
 
