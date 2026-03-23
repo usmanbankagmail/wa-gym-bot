@@ -140,6 +140,9 @@ document.getElementById("f").addEventListener("submit", async function (e) {
 
   window.location.href = "/admin/app";
 });
+document.getElementById("scopeFilter").addEventListener("change", function(){
+  loadInbox();
+});
 </script>
 </body>
 </html>`);
@@ -225,7 +228,16 @@ app.get("/admin/app", requireAdmin, (req, res) => {
       
       <div class="card" style="flex:1;min-width:300px;">
         <h3>Inbox</h3>
-        <div id="inboxCount" class="small">Handoff chats: 0</div>
+
+<div style="margin-top:6px;">
+  <label class="small">View:</label>
+  <select id="scopeFilter">
+    <option value="handoff">Handoff</option>
+    <option value="all">All</option>
+  </select>
+</div>
+
+<div id="inboxCount" class="small">Handoff chats: 0</div>
         <div class="actionRow">
           <button id="refreshInbox">Refresh Inbox</button>
         </div>
@@ -269,7 +281,8 @@ function escapeHtml(str) {
 }
 
 async function loadInbox() {
-  const r = await fetch("/admin/inbox/full");
+  const scope = document.getElementById("scopeFilter").value;
+const r = await fetch("/admin/inbox/full?scope=" + scope);
   const data = await r.json().catch(function(){ return {}; });
 
   const list = document.getElementById("inboxList");
@@ -307,7 +320,7 @@ b.innerHTML =
   '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
   '<div style="font-size:12px;color:#999;margin-top:6px;">Last: ' + escapeHtml(lastTime) + '</div>' +
   '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
-  
+
     b.addEventListener("click", function() {
       selectChat(c.waId, name, assigned, status, false);
     });
@@ -697,9 +710,16 @@ app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res)
 });
 
 app.get("/admin/inbox", requireAdmin, async (req, res) => {
-  const status = req.query.status;
-  const q = { handoffMode: true };
-  if (status) q.status = status;
+const status = req.query.status;
+const scope = req.query.scope || "handoff";
+
+const q = {};
+if (scope === "handoff") {
+  q.handoffMode = true;
+}
+if (status) {
+  q.status = status;
+}
 
   const convos = await Conversation.find(q)
     .sort({ lastMessageAt: -1, updatedAt: -1 })
@@ -712,8 +732,15 @@ app.get("/admin/inbox", requireAdmin, async (req, res) => {
 
 app.get("/admin/inbox/full", requireAdmin, async (req, res) => {
   const status = req.query.status;
-  const q = { handoffMode: true };
-  if (status) q.status = status;
+const scope = req.query.scope || "handoff";
+
+const q = {};
+if (scope === "handoff") {
+  q.handoffMode = true;
+}
+if (status) {
+  q.status = status;
+}
 
   const convos = await Conversation.find(q)
     .sort({ lastMessageAt: -1, updatedAt: -1 })
