@@ -307,6 +307,18 @@ if (scope === "all") {
 } else {
   inboxCount.textContent = "Handoff chats: " + data.convos.length;
 }
+
+data.convos.sort(function(a, b) {
+  const aWaiting = a.lastMessageFrom === "customer";
+  const bWaiting = b.lastMessageFrom === "customer";
+
+  if (aWaiting && !bWaiting) return -1;
+  if (!aWaiting && bWaiting) return 1;
+
+  return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0);
+});
+
+
   data.convos.forEach(function(c) {
     const b = document.createElement("button");
     const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
