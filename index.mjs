@@ -19,6 +19,8 @@ import AdminUser from "./models/AdminUser.js";
 
 import { handleInbound } from "./services/flows.js";
 import { sendText } from "./services/whatsapp.js";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
 dotenv.config();
 
@@ -1090,7 +1092,9 @@ app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
         scope: scope || "",
         hasTranscript: !!transcript,
         transcriptLength: transcript ? transcript.length : 0,
-        transcriptSample: transcript ? transcript.slice(0, 300) : ""
+        transcriptSample: transcript ? transcript.slice(0, 300) : "",
+        aiConfigured: !!GEMINI_API_KEY,
+aiModel: GEMINI_MODEL
       }
     });
   } catch (e) {
