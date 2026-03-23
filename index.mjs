@@ -559,6 +559,13 @@ document.getElementById("generateReportBtn").addEventListener("click", async fun
   const toDate = document.getElementById("reportToDate").value;
   const scope = document.getElementById("reportScope").value;
 
+  if (scope === "single" && !contact) {
+  document.getElementById("reportOutput").textContent = "Please enter a contact number for Single Contact reports.";
+  return;
+}
+
+
+
   const r = await fetch("/admin/reports/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
