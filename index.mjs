@@ -550,9 +550,26 @@ document.getElementById("refreshInbox").addEventListener("click", function() {
   loadInbox();
 });
 
-document.getElementById("analyzeReportBtn").addEventListener("click", function() {
-  document.getElementById("reportOutput").textContent =
-    "AI analysis not connected yet.";
+document.getElementById("analyzeReportBtn").addEventListener("click", async function() {
+  const contact = document.getElementById("reportContact").value.trim();
+  const fromDate = document.getElementById("reportFromDate").value;
+  const toDate = document.getElementById("reportToDate").value;
+  const scope = document.getElementById("reportScope").value;
+
+  const r = await fetch("/admin/reports/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contact: contact,
+      fromDate: fromDate,
+      toDate: toDate,
+      scope: scope
+    })
+  });
+
+  const data = await r.json().catch(function(){ return {}; });
+
+  document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
 });
 
 document.getElementById("scopeFilter").addEventListener("change", function() {
@@ -1044,6 +1061,21 @@ return res.json({
   totalMessages: messages.length,
   transcript: transcript
 });
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: e.message
+    });
+  }
+});
+
+
+app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
+  try {
+    return res.json({
+      ok: true,
+      message: "AI analysis route not connected yet"
+    });
   } catch (e) {
     return res.status(500).json({
       ok: false,
