@@ -1025,6 +1025,59 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
+
+async function callGeminiForReport(transcript) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY");
+  }
+
+  const prompt = `
+You are analyzing gym WhatsApp chats for the gym owner.
+
+Read the transcript and return a short business analysis with these sections:
+1. Potential customer or not
+2. Lead temperature
+3. Short summary
+4. Admin mistakes
+5. Missed sales opportunities
+6. Suggested follow-up
+
+Transcript:
+${transcript}
+  `.trim();
+
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: prompt }
+            ]
+          }
+        ]
+      })
+    }
+  );
+
+  const data = await response.json().catch(function () { return {}; });
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || "Gemini request failed");
+  }
+
+  return data;
+}
+
+
+
+
 app.post("/admin/reports/preview", requireAdmin, async (req, res) => {
   try {
     const { contact, fromDate, toDate, scope } = req.body || {};
