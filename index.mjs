@@ -292,6 +292,7 @@ inboxCount.textContent = "Handoff chats: " + data.convos.length;
     const name = (c.contact && c.contact.name) ? c.contact.name : "Unknown";
     const assigned = (c.assignedTo && c.assignedTo.name) ? c.assignedTo.name : "Unassigned";
     const preview = c.lastMessagePreview || "";
+    const lastTime = c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString() : "No time";
     const status = c.status || "";
 
     if (selectedWaId === c.waId) {
@@ -301,11 +302,12 @@ inboxCount.textContent = "Handoff chats: " + data.convos.length;
 }
 
 
-    b.innerHTML =
-      '<div><strong>' + escapeHtml(name) + '</strong></div>' +
-      '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
-      '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
-
+b.innerHTML =
+  '<div><strong>' + escapeHtml(name) + '</strong></div>' +
+  '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
+  '<div style="font-size:12px;color:#999;margin-top:6px;">Last: ' + escapeHtml(lastTime) + '</div>' +
+  '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
+  
     b.addEventListener("click", function() {
       selectChat(c.waId, name, assigned, status, false);
     });
