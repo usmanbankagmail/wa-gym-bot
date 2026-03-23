@@ -252,9 +252,10 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     </div>
   </div>
 
-  <div class="actionRow" style="margin-top:16px;">
-    <button id="generateReportBtn" type="button">Generate Report</button>
-  </div>
+<div class="actionRow" style="margin-top:16px;">
+  <button id="generateReportBtn" type="button">Generate Report</button>
+  <button id="analyzeReportBtn" type="button">Analyze with AI</button>
+</div>
 
   <div style="margin-top:16px;">
     <h4>Report Output</h4>
@@ -547,6 +548,11 @@ function startAutoRefresh() {
 
 document.getElementById("refreshInbox").addEventListener("click", function() {
   loadInbox();
+});
+
+document.getElementById("analyzeReportBtn").addEventListener("click", function() {
+  document.getElementById("reportOutput").textContent =
+    "AI analysis not connected yet.";
 });
 
 document.getElementById("scopeFilter").addEventListener("change", function() {
