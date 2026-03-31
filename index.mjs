@@ -43,10 +43,35 @@ const ADMIN_SETUP_KEY = process.env.ADMIN_SETUP_KEY || "";
 const isProd = process.env.NODE_ENV === "production";
 
 // --- Mongo ---
-mongoose
-  .connect(MONGODB_URI)
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err.message));
+let mongoConnectPromise = null;
+
+async function ensureDbConnected() {
+  if (!MONGODB_URI) {
+    throw new Error("MONGODB_URI is not set");
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  if (mongoConnectPromise) {
+    return mongoConnectPromise;
+  }
+
+  mongoConnectPromise = mongoose
+    .connect(MONGODB_URI)
+    .then((conn) => {
+      console.log("✅ MongoDB connected");
+      return conn;
+    })
+    .catch((err) => {
+      console.error("❌ MongoDB connection error:", err.message);
+      mongoConnectPromise = null;
+      throw err;
+    });
+
+  return mongoConnectPromise;
+}
 
 // --- Helpers ---
 function signAdminToken(admin) {
@@ -778,6 +803,7 @@ app.post("/admin/setup", async (req, res) => {
 
 app.post("/admin/auth/login", async (req, res) => {
   try {
+    await ensureDbConnected();
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ ok: false, error: "email + password required" });
@@ -811,6 +837,8 @@ app.post("/admin/auth/logout", (req, res) => {
 });
 
 app.get("/admin/me", requireAdmin, async (req, res) => {
+  await ensureDbConnected();
+  
   const admin = await AdminUser.findById(req.admin.id).lean();
   if (!admin) return res.status(401).json({ ok: false, error: "Not found" });
 
