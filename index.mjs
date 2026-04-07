@@ -277,6 +277,15 @@ app.get("/admin/app", requireAdmin, (req, res) => {
         <option value="date_range">Date Range</option>
       </select>
     </div>
+
+    <div style="flex:1;min-width:180px;">
+  <label class="small">Report Type</label>
+  <select id="reportType">
+    <option value="descriptive">Descriptive (Current)</option>
+    <option value="table">Admin Performance Table</option>
+  </select>
+</div>
+
   </div>
 
 <div class="actionRow" style="margin-top:16px;">
@@ -583,6 +592,7 @@ document.getElementById("analyzeReportBtn").addEventListener("click", async func
   const fromDate = document.getElementById("reportFromDate").value;
   const toDate = document.getElementById("reportToDate").value;
   const scope = document.getElementById("reportScope").value;
+  const reportType = document.getElementById("reportType").value;
 
   const r = await fetch("/admin/reports/analyze", {
     method: "POST",
@@ -592,6 +602,7 @@ document.getElementById("analyzeReportBtn").addEventListener("click", async func
   fromDate: fromDate,
   toDate: toDate,
   scope: scope,
+  reportType: reportType,
   transcript: currentReportTranscript
 })
 
@@ -723,6 +734,7 @@ app.post("/webhook", async (req, res) => {
     if (!messages || messages.length === 0) return;
 
     const msg = messages[0];
+    console.log("📩 Incoming message:", JSON.stringify(msg, null, 2));
     const waId = msg.from;
     const phoneE164 = waId.startsWith("+") ? waId : "+" + waId;
 
