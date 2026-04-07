@@ -765,7 +765,13 @@ app.post("/webhook", async (req, res) => {
   { upsert: true }
 );
 
-    await handleInbound({ waId, phoneE164, text, interactive });
+console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
+
+await handleInbound({ waId, phoneE164, text, interactive });
+
+console.log("✅ handleInbound finished");
+
+
   } catch (err) {
     console.error("❌ webhook error:", err?.response?.data || err.message);
   }
