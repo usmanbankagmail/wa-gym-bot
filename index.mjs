@@ -46,34 +46,30 @@ const isProd = process.env.NODE_ENV === "production";
 // --- Mongo ---
 let mongoConnectPromise = null;
 
+let isConnecting = false;
+
 async function ensureDbConnected() {
-  if (!MONGODB_URI) {
-    throw new Error("MONGODB_URI is not set");
-  }
-
   if (mongoose.connection.readyState === 1) {
-    return mongoose.connection;
+    return;
   }
 
-  if (mongoConnectPromise) {
-    return mongoConnectPromise;
+  if (isConnecting) {
+    return;
   }
 
-  mongoConnectPromise = mongoose
-    .connect(MONGODB_URI)
-    .then((conn) => {
-      console.log("✅ MongoDB connected");
-      return conn;
-    })
-    .catch((err) => {
-      console.error("❌ MongoDB connection error:", err.message);
-      mongoConnectPromise = null;
-      throw err;
+  isConnecting = true;
+
+  try {
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000
     });
-
-  return mongoConnectPromise;
+    console.log("✅ MongoDB connected (webhook)");
+  } catch (err) {
+    console.error("❌ MongoDB connect error:", err.message);
+  } finally {
+    isConnecting = false;
+  }
 }
-
 // --- Helpers ---
 function signAdminToken(admin) {
   return jwt.sign(
