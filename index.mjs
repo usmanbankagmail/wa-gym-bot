@@ -30,6 +30,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 const PORT = process.env.PORT || 8080;
@@ -721,6 +722,7 @@ app.get("/webhook", (req, res) => {
 // -------------------------
 app.post("/webhook", async (req, res) => {
   console.log("🔥 WEBHOOK HIT");
+  console.log("BODY:", req.body);
 
   res.sendStatus(200);
 
