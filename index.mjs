@@ -831,7 +831,9 @@ app.post("/admin/setup", async (req, res) => {
 
 app.post("/admin/auth/login", async (req, res) => {
   try {
-    await ensureDbConnected();
+     console.log("STEP DB-1: before ensureDbConnected");
+  await ensureDbConnected();
+  console.log("STEP DB-2: after ensureDbConnected");
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ ok: false, error: "email + password required" });
