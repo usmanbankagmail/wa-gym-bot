@@ -722,10 +722,12 @@ app.get("/webhook", (req, res) => {
 app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
-  await ensureDbConnected();
-
   
+
+
   try {
+    await ensureDbConnected();
+    
     const body = req.body;
     if (body.object !== "whatsapp_business_account") return;
 
