@@ -720,8 +720,6 @@ app.post("/webhook", async (req, res) => {
   console.log("🔥 WEBHOOK HIT");
   console.log("BODY:", req.body);
 
-  res.sendStatus(200);
-
   try {
     console.log("STEP DB-1: before ensureDbConnected");
     await ensureDbConnected();
@@ -777,9 +775,11 @@ app.post("/webhook", async (req, res) => {
     console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
     await handleInbound({ waId, phoneE164, text, interactive });
     console.log("STEP 3: handleInbound done");
-
+    return res.sendStatus(200);
   } catch (err) {
+    
     console.error("❌ webhook error:", err?.response?.data || err.message || err);
+    return res.sendStatus(200);
   }
 });
 // -------------------------
