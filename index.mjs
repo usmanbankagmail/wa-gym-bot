@@ -741,6 +741,7 @@ app.post("/webhook", async (req, res) => {
     if (!messages || messages.length === 0) return;
 
     const msg = messages[0];
+    console.log("STEP 1: message parsed");
     console.log("📩 Incoming message:", JSON.stringify(msg, null, 2));
     const waId = msg.from;
     const phoneE164 = waId.startsWith("+") ? waId : "+" + waId;
@@ -760,6 +761,7 @@ app.post("/webhook", async (req, res) => {
       "[interactive]";
 
     await Conversation.updateOne(
+      console.log("STEP 2: conversation updated");
   { waId },
   {
     $setOnInsert: { waId },
@@ -775,7 +777,7 @@ app.post("/webhook", async (req, res) => {
 console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
 
 await handleInbound({ waId, phoneE164, text, interactive });
-
+console.log("STEP 3: handleInbound done");
 console.log("✅ handleInbound finished");
 
 
