@@ -53,21 +53,14 @@ async function ensureDbConnected() {
     return;
   }
 
-  if (isConnecting) {
-    return;
-  }
-
-  isConnecting = true;
-
   try {
     await mongoose.connect(MONGODB_URI, {
       serverSelectionTimeoutMS: 5000
     });
-    console.log("✅ MongoDB connected (webhook)");
+    console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connect error:", err.message);
-  } finally {
-    isConnecting = false;
+    throw err; // 🔥 THIS IS THE FIX
   }
 }
 // --- Helpers ---
