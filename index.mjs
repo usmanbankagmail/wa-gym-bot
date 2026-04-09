@@ -660,7 +660,9 @@ document.getElementById("analyzeReportBtn").addEventListener("click", async func
   }
 
   // Fallback: show raw JSON
-  document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
+document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
+
+});  // closes analyzeReportBtn addEventListener
 
 
 document.getElementById("scopeFilter").addEventListener("change", function() {
