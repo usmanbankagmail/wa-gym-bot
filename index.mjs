@@ -727,7 +727,9 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 
   try {
+    console.log("STEP DB-1: before ensureDbConnected");
     await ensureDbConnected();
+    console.log("STEP DB-2: after ensureDbConnected");
 
     const body = req.body;
     if (body.object !== "whatsapp_business_account") return;
@@ -735,6 +737,7 @@ app.post("/webhook", async (req, res) => {
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
+
     console.log("VALUE:", JSON.stringify(value, null, 2));
 
     const messages = value?.messages;
@@ -745,7 +748,6 @@ app.post("/webhook", async (req, res) => {
 
     const waId = msg.from;
     const phoneE164 = waId.startsWith("+") ? waId : "+" + waId;
-
     const text = msg.text?.body || "";
 
     const interactive =
@@ -777,16 +779,13 @@ app.post("/webhook", async (req, res) => {
     console.log("STEP 2: conversation updated");
 
     console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
-
     await handleInbound({ waId, phoneE164, text, interactive });
-
     console.log("STEP 3: handleInbound done");
 
   } catch (err) {
-    console.error("❌ webhook error:", err?.response?.data || err.message);
+    console.error("❌ webhook error:", err?.response?.data || err.message || err);
   }
 });
-
 // -------------------------
 // Admin Auth + Setup
 // -------------------------
