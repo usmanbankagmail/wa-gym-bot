@@ -720,12 +720,9 @@ app.get("/webhook", (req, res) => {
 // Webhook Receive (POST)
 // -------------------------
 app.post("/webhook", async (req, res) => {
-    console.log("🔥 WEBHOOK HIT");
+  console.log("🔥 WEBHOOK HIT");
 
-    res.sendStatus(200);
-
-  
-
+  res.sendStatus(200);
 
   try {
     await ensureDbConnected();
@@ -742,11 +739,12 @@ app.post("/webhook", async (req, res) => {
 
     const msg = messages[0];
     console.log("STEP 1: message parsed");
-    console.log("📩 Incoming message:", JSON.stringify(msg, null, 2));
+
     const waId = msg.from;
     const phoneE164 = waId.startsWith("+") ? waId : "+" + waId;
 
     const text = msg.text?.body || "";
+
     const interactive =
       msg.interactive?.type === "button_reply"
         ? { button_reply: msg.interactive.button_reply }
@@ -761,25 +759,25 @@ app.post("/webhook", async (req, res) => {
       "[interactive]";
 
     await Conversation.updateOne(
-      console.log("STEP 2: conversation updated");
-  { waId },
-  {
-    $setOnInsert: { waId },
-    $set: {
-      lastMessageAt: new Date(),
-      lastMessagePreview: preview,
-      lastMessageFrom: "customer"
-    }
-  },
-  { upsert: true }
-);
+      { waId: waId },
+      {
+        $setOnInsert: { waId: waId },
+        $set: {
+          lastMessageAt: new Date(),
+          lastMessagePreview: preview,
+          lastMessageFrom: "customer"
+        }
+      },
+      { upsert: true }
+    );
 
-console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
+    console.log("STEP 2: conversation updated");
 
-await handleInbound({ waId, phoneE164, text, interactive });
-console.log("STEP 3: handleInbound done");
-console.log("✅ handleInbound finished");
+    console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
 
+    await handleInbound({ waId, phoneE164, text, interactive });
+
+    console.log("STEP 3: handleInbound done");
 
   } catch (err) {
     console.error("❌ webhook error:", err?.response?.data || err.message);
