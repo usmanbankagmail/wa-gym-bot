@@ -46,23 +46,34 @@ const isProd = process.env.NODE_ENV === "production";
 // --- Mongo ---
 let mongoConnectPromise = null;
 
-let isConnecting = false;
-
 async function ensureDbConnected() {
-  if (mongoose.connection.readyState === 1) {
-    return;
+  if (!MONGODB_URI) {
+    throw new Error("MONGODB_URI is not set");
   }
 
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000
-    });
-    console.log("✅ MongoDB connected");
-  } catch (err) {
-    console.error("❌ MongoDB connect error:", err.message);
-    throw err; // 🔥 THIS IS THE FIX
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
   }
+
+  if (mongoConnectPromise) {
+    return mongoConnectPromise;
+  }
+
+  mongoConnectPromise = mongoose.connect(MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000
+  }).then((conn) => {
+    console.log("✅ MongoDB connected");
+    return conn;
+  }).catch((err) => {
+    console.error("❌ MongoDB connect error:", err.message);
+    mongoConnectPromise = null;
+    throw err;
+  });
+
+  return mongoConnectPromise;
 }
+
+
 // --- Helpers ---
 function signAdminToken(admin) {
   return jwt.sign(
@@ -295,7 +306,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 
   <div style="margin-top:16px;">
     <h4>Report Output</h4>
-    <pre id="reportOutput">No report generated yet.</pre>
+    <div id="reportOutput" style="background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto;white-space:pre-wrap;min-height:40px;">No report generated yet.</div>
   </div>
 </div>
 
@@ -610,14 +621,47 @@ document.getElementById("analyzeReportBtn").addEventListener("click", async func
 
   const data = await r.json().catch(function(){ return {}; });
 
-  if (data.aiText) {
-  document.getElementById("reportOutput").textContent = data.aiText;
-} else {
+ // DESCRIPTIVE: show plain text as before
+  if (data.reportType === "descriptive" || data.aiText) {
+    document.getElementById("reportOutput").textContent = data.aiText || JSON.stringify(data, null, 2);
+    return;
+  }
+
+  // TABLE: build an HTML table dynamically
+  if (data.reportType === "table" && data.columns && data.rows) {
+    const container = document.getElementById("reportOutput");
+
+    // Build table string manually (no frameworks needed)
+    let html = '<table style="border-collapse:collapse;width:100%;font-size:13px;">';
+
+    // Header row — one <th> per column name
+    html += "<thead><tr>";
+    data.columns.forEach(function(col) {
+      html += '<th style="border:1px solid #ccc;padding:8px;background:#f0f0f0;text-align:left;">'
+        + escapeHtml(col) + "</th>";
+    });
+    html += "</tr></thead>";
+
+    // Data rows
+    html += "<tbody>";
+    data.rows.forEach(function(row) {
+      html += "<tr>";
+      row.forEach(function(cell) {
+        html += '<td style="border:1px solid #ccc;padding:8px;vertical-align:top;">'
+          + escapeHtml(String(cell)) + "</td>";
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table>";
+
+    // Use innerHTML here — we built it safely using escapeHtml on all values
+    container.innerHTML = html;
+    return;
+  }
+
+  // Fallback: show raw JSON
   document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
-}
 
-
-});
 
 document.getElementById("scopeFilter").addEventListener("change", function() {
   loadInbox();
@@ -1137,6 +1181,36 @@ ${transcript}
   return data;
 }
 
+// Generic Gemini caller — accepts a fully-formed prompt string.
+// callGeminiForReport calls this internally too (refactor optional later).
+async function callGeminiWithPrompt(prompt) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY");
+  }
+
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    }
+  );
+
+  const data = await response.json().catch(function () { return {}; });
+
+  if (!response.ok) {
+    throw new Error(data.error?.message || "Gemini request failed");
+  }
+
+  return data;
+}
+
 
 
 
@@ -1195,36 +1269,111 @@ return res.json({
 
 app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
   try {
-    const { transcript } = req.body || {};
+    // Pull transcript AND reportType from the request body.
+    // reportType defaults to "descriptive" if not sent.
+    const { transcript, reportType = "descriptive" } = req.body || {};
 
-if (!transcript) {
-  return res.status(400).json({
-    ok: false,
-    error: "No transcript provided"
-  });
+    // Guard: transcript must exist
+    if (!transcript) {
+      return res.status(400).json({ ok: false, error: "No transcript provided" });
+    }
+
+    // ── BRANCH A: descriptive (existing behaviour, unchanged) ──────────────
+    if (reportType === "descriptive") {
+      const geminiResponse = await callGeminiForReport(transcript);
+
+      let aiText = "";
+      try {
+        aiText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      } catch (e) {
+        aiText = "";
+      }
+
+      return res.json({ ok: true, reportType: "descriptive", aiText: aiText || "No response from AI" });
+    }
+
+    // ── BRANCH B: table ────────────────────────────────────────────────────
+    if (reportType === "table") {
+
+      // Build a prompt that tells Gemini: return ONLY JSON, nothing else.
+      // We describe the exact shape we want so it has no room to freestyle.
+      const tablePrompt = `
+You are a gym business analyst. Analyze the following WhatsApp chat transcript.
+
+Return ONLY a JSON object — no explanation, no markdown, no backticks.
+The JSON must match this exact structure:
+{
+  "columns": ["Column1", "Column2", "Column3"],
+  "rows": [
+    ["value1", "value2", "value3"],
+    ["value1", "value2", "value3"]
+  ]
 }
 
-const geminiResponse = await callGeminiForReport(transcript);
+Use these exact columns:
+["Contact", "Lead Temperature", "Potential Customer?", "Admin Mistakes", "Missed Opportunities", "Suggested Follow-up"]
 
-// Extract text safely
-let aiText = "";
+Each row = one conversation or one contact found in the transcript.
+Fill every cell with a short phrase (max 8 words). Use "N/A" if not applicable.
+Do NOT include any text outside the JSON object.
 
-try {
-  aiText =
-    geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
-} catch (e) {
-  aiText = "";
-}
+Transcript:
+${transcript}
+      `.trim();
 
-return res.json({
-  ok: true,
-  aiText: aiText || "No response from AI"
-});
+      // Call Gemini with our table prompt (reusing the same fetch pattern)
+      const rawGeminiResponse = await callGeminiWithPrompt(tablePrompt);
+
+      // Extract the raw text Gemini returned
+      let rawText = "";
+      try {
+        rawText = rawGeminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      } catch (e) {
+        rawText = "";
+      }
+
+      // Gemini sometimes wraps JSON in ```json ... ``` fences — strip them
+      const cleaned = rawText
+        .replace(/```json/gi, "")   // remove opening fence
+        .replace(/```/g, "")        // remove closing fence
+        .trim();                     // remove leading/trailing whitespace
+
+      // Safely parse the JSON
+      let parsed = null;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (parseErr) {
+        // If Gemini returned garbage, tell the frontend clearly
+        return res.status(422).json({
+          ok: false,
+          error: "AI returned invalid JSON. Try again or use Descriptive mode.",
+          raw: cleaned.slice(0, 500) // send first 500 chars so you can debug
+        });
+      }
+
+      // Validate the parsed object has the shape we expect
+      if (!Array.isArray(parsed.columns) || !Array.isArray(parsed.rows)) {
+        return res.status(422).json({
+          ok: false,
+          error: "AI response missing columns or rows.",
+          raw: cleaned.slice(0, 500)
+        });
+      }
+
+      // All good — return structured data
+      return res.json({
+        ok: true,
+        reportType: "table",
+        columns: parsed.columns,
+        rows: parsed.rows
+      });
+    }
+
+    // ── Unknown reportType ─────────────────────────────────────────────────
+    return res.status(400).json({ ok: false, error: "Unknown reportType: " + reportType });
+
   } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: e.message
-    });
+    return res.status(500).json({ ok: false, error: e.message });
   }
 });
 
