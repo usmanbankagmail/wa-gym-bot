@@ -97,6 +97,16 @@ function cookieOptions() {
 // --- Health ---
 app.get("/", (req, res) => res.send("OK"));
 
+app.get("/test-db", async (req, res) => {
+  try {
+    await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+    res.send("DB CONNECTED");
+  } catch (e) {
+    res.send("DB ERROR: " + e.message);
+  }
+});
+
+
 // -------------------------
 // Admin UI (minimal, no build step)
 // -------------------------
