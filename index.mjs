@@ -735,6 +735,7 @@ app.post("/webhook", async (req, res) => {
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
     const value = changes?.value;
+    console.log("VALUE:", JSON.stringify(value, null, 2));
 
     const messages = value?.messages;
     if (!messages || messages.length === 0) return;
