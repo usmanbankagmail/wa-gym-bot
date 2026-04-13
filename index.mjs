@@ -1450,4 +1450,4 @@ app.post("/admin/trials/:id/status", requireAdmin, async (req, res) => {
   res.json({ ok: true, trial: trial });
 });
 
-app.listen(PORT, () => console.log(\`✅ Server listening on port \${PORT}\`));
+app.listen(PORT, () => console.log(`✅ Server listening on port ${PORT}`));
