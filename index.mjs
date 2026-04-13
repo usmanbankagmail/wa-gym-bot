@@ -19,6 +19,7 @@ import AdminUser from "./models/AdminUser.js";
 
 import { handleInbound } from "./services/flows.js";
 import { sendText } from "./services/whatsapp.js";
+
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 
@@ -73,7 +74,6 @@ async function ensureDbConnected() {
   return mongoConnectPromise;
 }
 
-
 // --- Helpers ---
 function signAdminToken(admin) {
   return jwt.sign(
@@ -83,6 +83,7 @@ function signAdminToken(admin) {
   );
 }
 
+// requireAdmin: verifies JWT cookie AND ensures DB is connected before every protected route
 function requireAdmin(req, res, next) {
   try {
     const token = req.cookies?.admin_token;
@@ -90,7 +91,15 @@ function requireAdmin(req, res, next) {
 
     const payload = jwt.verify(token, ADMIN_JWT_SECRET);
     req.admin = payload;
-    return next();
+
+    // Ensure DB is connected before the route handler runs
+    ensureDbConnected()
+      .then(() => next())
+      .catch((err) => {
+        console.error("DB connect failed in requireAdmin:", err.message);
+        return res.status(500).json({ ok: false, error: "Database unavailable" });
+      });
+
   } catch (e) {
     return res.status(401).json({ ok: false, error: "Invalid session" });
   }
@@ -116,7 +125,6 @@ app.get("/test-db", async (req, res) => {
     res.send("DB ERROR: " + e.message);
   }
 });
-
 
 // -------------------------
 // Admin UI (minimal, no build step)
@@ -178,7 +186,6 @@ document.getElementById("f").addEventListener("submit", async function (e) {
 
   window.location.href = "/admin/app";
 });
-
 </script>
 </body>
 </html>`);
@@ -200,7 +207,7 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     a{color:#0b57d0;text-decoration:none}
     a:hover{text-decoration:underline}
     .links a{margin-right:14px}
-    input, textarea{padding:10px;border:1px solid #ccc;border-radius:10px;width:100%;}
+    input, textarea, select{padding:10px;border:1px solid #ccc;border-radius:10px;width:100%;}
     textarea{min-height:80px;resize:vertical;}
     .small{color:#666;font-size:12px}
     .chatBtn{
@@ -241,6 +248,24 @@ app.get("/admin/app", requireAdmin, (req, res) => {
     }
     .actionRow{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
     .muted{color:#666;}
+    .reportTableWrap{overflow:auto;}
+    .reportTable{
+      border-collapse:collapse;
+      width:100%;
+      font-size:13px;
+      background:#fff;
+    }
+    .reportTable th,
+    .reportTable td{
+      border:1px solid #ccc;
+      padding:8px;
+      text-align:left;
+      vertical-align:top;
+      white-space:pre-wrap;
+    }
+    .reportTable th{
+      background:#f0f0f0;
+    }
   </style>
 </head>
 <body>
@@ -252,79 +277,72 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 
   <div class="card">
     <div class="links">
-  <a href="/admin/trials" target="_blank">Trials</a>
-  <a href="/admin/contacts" target="_blank">Contacts</a>
-  <a href="/admin/inbox" target="_blank">Inbox</a>
-  <a href="#reportsSection">Reports</a>
-  <a href="/admin/me" target="_blank">Me</a>
-</div>
+      <a href="/admin/trials" target="_blank">Trials</a>
+      <a href="/admin/contacts" target="_blank">Contacts</a>
+      <a href="/admin/inbox" target="_blank">Inbox</a>
+      <a href="#reportsSection">Reports</a>
+      <a href="/admin/me" target="_blank">Me</a>
+    </div>
   </div>
 
   <div class="card" id="reportsSection">
-  <h3>Reports</h3>
-  <div class="small">Generate a future AI review of chats by contact number, date range, or scope.</div>
+    <h3>Reports</h3>
+    <div class="small">Generate a future AI review of chats by contact number, date range, or scope.</div>
 
-  <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;">
-    <div style="flex:1;min-width:220px;">
-      <label class="small">Contact Number</label>
-      <input id="reportContact" type="text" placeholder="e.g. 923001234567" />
+    <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:220px;">
+        <label class="small">Contact Number</label>
+        <input id="reportContact" type="text" placeholder="e.g. 923001234567" />
+      </div>
+      <div style="flex:1;min-width:180px;">
+        <label class="small">From Date</label>
+        <input id="reportFromDate" type="date" />
+      </div>
+      <div style="flex:1;min-width:180px;">
+        <label class="small">To Date</label>
+        <input id="reportToDate" type="date" />
+      </div>
+      <div style="flex:1;min-width:180px;">
+        <label class="small">Scope</label>
+        <select id="reportScope">
+          <option value="single">Single Contact</option>
+          <option value="all">All Chats</option>
+          <option value="date_range">Date Range</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:180px;">
+        <label class="small">Report Type</label>
+        <select id="reportType">
+          <option value="descriptive">Descriptive (Current)</option>
+          <option value="table">Admin Performance Table</option>
+        </select>
+      </div>
     </div>
 
-    <div style="flex:1;min-width:180px;">
-      <label class="small">From Date</label>
-      <input id="reportFromDate" type="date" />
+    <div class="actionRow" style="margin-top:16px;">
+      <button id="generateReportBtn" type="button">Generate Report</button>
+      <button id="analyzeReportBtn" type="button">Analyze with AI</button>
     </div>
 
-    <div style="flex:1;min-width:180px;">
-      <label class="small">To Date</label>
-      <input id="reportToDate" type="date" />
+    <div style="margin-top:16px;">
+      <h4>Report Output</h4>
+      <div id="reportOutput" style="background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto;white-space:pre-wrap;min-height:40px;">No report generated yet.</div>
     </div>
-
-    <div style="flex:1;min-width:180px;">
-      <label class="small">Scope</label>
-      <select id="reportScope">
-        <option value="single">Single Contact</option>
-        <option value="all">All Chats</option>
-        <option value="date_range">Date Range</option>
-      </select>
-    </div>
-
-    <div style="flex:1;min-width:180px;">
-  <label class="small">Report Type</label>
-  <select id="reportType">
-    <option value="descriptive">Descriptive (Current)</option>
-    <option value="table">Admin Performance Table</option>
-  </select>
-</div>
-
   </div>
-
-<div class="actionRow" style="margin-top:16px;">
-  <button id="generateReportBtn" type="button">Generate Report</button>
-  <button id="analyzeReportBtn" type="button">Analyze with AI</button>
-</div>
-
-  <div style="margin-top:16px;">
-    <h4>Report Output</h4>
-    <div id="reportOutput" style="background:#f6f6f6;padding:12px;border-radius:12px;overflow:auto;white-space:pre-wrap;min-height:40px;">No report generated yet.</div>
-  </div>
-</div>
 
   <div class="card" style="padding:0;border:none;background:transparent;">
     <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
-      
+
       <div class="card" style="flex:1;min-width:300px;">
         <h3>Inbox</h3>
-
-<div style="margin-top:6px;">
-  <label class="small">View:</label>
-  <select id="scopeFilter">
-    <option value="handoff">Handoff</option>
-    <option value="all">All</option>
-  </select>
-</div>
-
-<div id="inboxCount" class="small">Handoff chats: 0</div>
+        <div style="margin-top:6px;">
+          <label class="small">View:</label>
+          <select id="scopeFilter">
+            <option value="handoff">Handoff</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div id="inboxCount" class="small">Handoff chats: 0</div>
         <div class="actionRow">
           <button id="refreshInbox">Refresh Inbox</button>
         </div>
@@ -368,9 +386,37 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;");
 }
 
+function renderReportTable(columns, rows) {
+  const container = document.getElementById("reportOutput");
+
+  let html = '<div class="reportTableWrap">';
+  html += '<table class="reportTable">';
+
+  html += "<thead><tr>";
+  columns.forEach(function(col) {
+    html += "<th>" + escapeHtml(col) + "</th>";
+  });
+  html += "</tr></thead>";
+
+  html += "<tbody>";
+  rows.forEach(function(row) {
+    html += "<tr>";
+
+    columns.forEach(function(_, index) {
+      const cell = Array.isArray(row) ? row[index] : "";
+      html += "<td>" + escapeHtml(cell == null ? "" : String(cell)) + "</td>";
+    });
+
+    html += "</tr>";
+  });
+  html += "</tbody></table></div>";
+
+  container.innerHTML = html;
+}
+
 async function loadInbox() {
   const scope = document.getElementById("scopeFilter").value;
-const r = await fetch("/admin/inbox/full?scope=" + scope);
+  const r = await fetch("/admin/inbox/full?scope=" + scope);
   const data = await r.json().catch(function(){ return {}; });
 
   const list = document.getElementById("inboxList");
@@ -383,31 +429,29 @@ const r = await fetch("/admin/inbox/full?scope=" + scope);
   }
 
   if (!data.convos || data.convos.length === 0) {
-  if (scope === "all") {
-    inboxCount.textContent = "All chats: 0";
-    list.textContent = "No conversations.";
-  } else {
-    inboxCount.textContent = "Handoff chats: 0";
-    list.textContent = "No handoff conversations.";
+    if (scope === "all") {
+      inboxCount.textContent = "All chats: 0";
+      list.textContent = "No conversations.";
+    } else {
+      inboxCount.textContent = "Handoff chats: 0";
+      list.textContent = "No handoff conversations.";
+    }
+    return;
   }
-  return;
-}
-if (scope === "all") {
-  inboxCount.textContent = "All chats: " + data.convos.length;
-} else {
-  inboxCount.textContent = "Handoff chats: " + data.convos.length;
-}
 
-data.convos.sort(function(a, b) {
-  const aWaiting = a.lastMessageFrom === "customer";
-  const bWaiting = b.lastMessageFrom === "customer";
+  if (scope === "all") {
+    inboxCount.textContent = "All chats: " + data.convos.length;
+  } else {
+    inboxCount.textContent = "Handoff chats: " + data.convos.length;
+  }
 
-  if (aWaiting && !bWaiting) return -1;
-  if (!aWaiting && bWaiting) return 1;
-
-  return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0);
-});
-
+  data.convos.sort(function(a, b) {
+    const aWaiting = a.lastMessageFrom === "customer";
+    const bWaiting = b.lastMessageFrom === "customer";
+    if (aWaiting && !bWaiting) return -1;
+    if (!aWaiting && bWaiting) return 1;
+    return new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0);
+  });
 
   data.convos.forEach(function(c) {
     const b = document.createElement("button");
@@ -419,18 +463,17 @@ data.convos.sort(function(a, b) {
     const waiting = c.lastMessageFrom === "customer";
 
     if (selectedWaId === c.waId) {
-  b.className = "chatBtn active";
-} else {
-  b.className = "chatBtn";
-}
+      b.className = "chatBtn active";
+    } else {
+      b.className = "chatBtn";
+    }
 
-
-b.innerHTML =
-  '<div><strong>' + escapeHtml(name) + '</strong></div>' +
-  '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
-  (waiting ? '<div style="color:#d93025;font-size:12px;margin-top:4px;">Customer waiting</div>' : '') +
-  '<div style="font-size:12px;color:#999;margin-top:6px;">Last: ' + escapeHtml(lastTime) + '</div>' +
-  '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
+    b.innerHTML =
+      '<div><strong>' + escapeHtml(name) + '</strong></div>' +
+      '<div style="font-size:12px;color:#666;margin-top:4px;">' + escapeHtml(preview) + '</div>' +
+      (waiting ? '<div style="color:#d93025;font-size:12px;margin-top:4px;">Customer waiting</div>' : '') +
+      '<div style="font-size:12px;color:#999;margin-top:6px;">Last: ' + escapeHtml(lastTime) + '</div>' +
+      '<div style="font-size:12px;color:#999;margin-top:6px;">Status: ' + escapeHtml(status) + ' | Assigned: ' + escapeHtml(assigned) + '</div>';
 
     b.addEventListener("click", function() {
       selectChat(c.waId, name, assigned, status, false);
@@ -598,73 +641,6 @@ document.getElementById("refreshInbox").addEventListener("click", function() {
   loadInbox();
 });
 
-document.getElementById("analyzeReportBtn").addEventListener("click", async function() {
-  const contact = document.getElementById("reportContact").value.trim();
-  const fromDate = document.getElementById("reportFromDate").value;
-  const toDate = document.getElementById("reportToDate").value;
-  const scope = document.getElementById("reportScope").value;
-  const reportType = document.getElementById("reportType").value;
-
-  const r = await fetch("/admin/reports/analyze", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-  contact: contact,
-  fromDate: fromDate,
-  toDate: toDate,
-  scope: scope,
-  reportType: reportType,
-  transcript: currentReportTranscript
-})
-
-  });
-
-  const data = await r.json().catch(function(){ return {}; });
-
- // DESCRIPTIVE: show plain text as before
-  if (data.reportType === "descriptive" || data.aiText) {
-    document.getElementById("reportOutput").textContent = data.aiText || JSON.stringify(data, null, 2);
-    return;
-  }
-
-  // TABLE: build an HTML table dynamically
-  if (data.reportType === "table" && data.columns && data.rows) {
-    const container = document.getElementById("reportOutput");
-
-    // Build table string manually (no frameworks needed)
-    let html = '<table style="border-collapse:collapse;width:100%;font-size:13px;">';
-
-    // Header row — one <th> per column name
-    html += "<thead><tr>";
-    data.columns.forEach(function(col) {
-      html += '<th style="border:1px solid #ccc;padding:8px;background:#f0f0f0;text-align:left;">'
-        + escapeHtml(col) + "</th>";
-    });
-    html += "</tr></thead>";
-
-    // Data rows
-    html += "<tbody>";
-    data.rows.forEach(function(row) {
-      html += "<tr>";
-      row.forEach(function(cell) {
-        html += '<td style="border:1px solid #ccc;padding:8px;vertical-align:top;">'
-          + escapeHtml(String(cell)) + "</td>";
-      });
-      html += "</tr>";
-    });
-    html += "</tbody></table>";
-
-    // Use innerHTML here — we built it safely using escapeHtml on all values
-    container.innerHTML = html;
-    return;
-  }
-
-  // Fallback: show raw JSON
-document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
-
-});  // closes analyzeReportBtn addEventListener
-
-
 document.getElementById("scopeFilter").addEventListener("change", function() {
   loadInbox();
 });
@@ -676,11 +652,9 @@ document.getElementById("generateReportBtn").addEventListener("click", async fun
   const scope = document.getElementById("reportScope").value;
 
   if (scope === "single" && !contact) {
-  document.getElementById("reportOutput").textContent = "Please enter a contact number for Single Contact reports.";
-  return;
-}
-
-
+    document.getElementById("reportOutput").textContent = "Please enter a contact number for Single Contact reports.";
+    return;
+  }
 
   const r = await fetch("/admin/reports/preview", {
     method: "POST",
@@ -696,14 +670,58 @@ document.getElementById("generateReportBtn").addEventListener("click", async fun
   const data = await r.json().catch(function(){ return {}; });
 
   if (data.transcript) {
-  currentReportTranscript = data.transcript;
-  document.getElementById("reportOutput").textContent =
-    "Total Messages: " + data.totalMessages + "\\n\\n" + data.transcript;
-} else {
-  currentReportTranscript = "";
-  document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
-}
+    currentReportTranscript = data.transcript;
+    document.getElementById("reportOutput").textContent =
+      "Total Messages: " + data.totalMessages + "\\n\\n" + data.transcript;
+  } else {
+    currentReportTranscript = "";
+    document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
+  }
+});
 
+document.getElementById("analyzeReportBtn").addEventListener("click", async function() {
+  const contact = document.getElementById("reportContact").value.trim();
+  const fromDate = document.getElementById("reportFromDate").value;
+  const toDate = document.getElementById("reportToDate").value;
+  const scope = document.getElementById("reportScope").value;
+  const reportType = document.getElementById("reportType").value;
+
+  const r = await fetch("/admin/reports/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contact: contact,
+      fromDate: fromDate,
+      toDate: toDate,
+      scope: scope,
+      reportType: reportType,
+      transcript: currentReportTranscript
+    })
+  });
+
+  const data = await r.json().catch(function(){ return {}; });
+
+  if (!r.ok || !data.ok) {
+    document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
+    return;
+  }
+
+  if (data.reportType === "descriptive") {
+    document.getElementById("reportOutput").textContent = data.aiText || "No descriptive report returned.";
+    return;
+  }
+
+  if (data.reportType === "table") {
+    if (Array.isArray(data.columns) && Array.isArray(data.rows)) {
+      renderReportTable(data.columns, data.rows);
+      return;
+    }
+
+    document.getElementById("reportOutput").textContent = "Table report returned invalid data.";
+    return;
+  }
+
+  document.getElementById("reportOutput").textContent = JSON.stringify(data, null, 2);
 });
 
 document.getElementById("sendBtn").addEventListener("click", async function() {
@@ -770,12 +788,10 @@ app.post("/webhook", async (req, res) => {
   console.log("BODY:", req.body);
 
   try {
-    console.log("STEP DB-1: before ensureDbConnected");
     await ensureDbConnected();
-    console.log("STEP DB-2: after ensureDbConnected");
 
     const body = req.body;
-    if (body.object !== "whatsapp_business_account") return;
+    if (body.object !== "whatsapp_business_account") return res.sendStatus(200);
 
     const entry = body.entry?.[0];
     const changes = entry?.changes?.[0];
@@ -784,10 +800,9 @@ app.post("/webhook", async (req, res) => {
     console.log("VALUE:", JSON.stringify(value, null, 2));
 
     const messages = value?.messages;
-    if (!messages || messages.length === 0) return;
+    if (!messages || messages.length === 0) return res.sendStatus(200);
 
     const msg = messages[0];
-    console.log("STEP 1: message parsed");
 
     const waId = msg.from;
     const phoneE164 = waId.startsWith("+") ? waId : "+" + waId;
@@ -819,24 +834,22 @@ app.post("/webhook", async (req, res) => {
       { upsert: true }
     );
 
-    console.log("STEP 2: conversation updated");
-
-    console.log("➡️ Calling handleInbound with:", { waId, phoneE164, text, interactive });
     await handleInbound({ waId, phoneE164, text, interactive });
-    console.log("STEP 3: handleInbound done");
     return res.sendStatus(200);
   } catch (err) {
-    
     console.error("❌ webhook error:", err?.response?.data || err.message || err);
     return res.sendStatus(200);
   }
 });
+
 // -------------------------
 // Admin Auth + Setup
 // -------------------------
 
 app.post("/admin/setup", async (req, res) => {
   try {
+    await ensureDbConnected();
+
     if (!ADMIN_SETUP_KEY) {
       return res.status(403).json({ ok: false, error: "ADMIN_SETUP_KEY not set" });
     }
@@ -875,9 +888,8 @@ app.post("/admin/setup", async (req, res) => {
 
 app.post("/admin/auth/login", async (req, res) => {
   try {
-     console.log("STEP DB-1: before ensureDbConnected");
-  await ensureDbConnected();
-  console.log("STEP DB-2: after ensureDbConnected");
+    await ensureDbConnected();
+
     const { email, password } = req.body || {};
     if (!email || !password) {
       return res.status(400).json({ ok: false, error: "email + password required" });
@@ -911,8 +923,6 @@ app.post("/admin/auth/logout", (req, res) => {
 });
 
 app.get("/admin/me", requireAdmin, async (req, res) => {
-  await ensureDbConnected();
-  
   const admin = await AdminUser.findById(req.admin.id).lean();
   if (!admin) return res.status(401).json({ ok: false, error: "Not found" });
 
@@ -953,16 +963,16 @@ app.post("/admin/conversations/:waId/handoff/on", requireAdmin, async (req, res)
 });
 
 app.get("/admin/inbox", requireAdmin, async (req, res) => {
-const status = req.query.status;
-const scope = req.query.scope || "handoff";
+  const status = req.query.status;
+  const scope = req.query.scope || "handoff";
 
-const q = {};
-if (scope === "handoff") {
-  q.handoffMode = true;
-}
-if (status) {
-  q.status = status;
-}
+  const q = {};
+  if (scope === "handoff") {
+    q.handoffMode = true;
+  }
+  if (status) {
+    q.status = status;
+  }
 
   const convos = await Conversation.find(q)
     .sort({ lastMessageAt: -1, updatedAt: -1 })
@@ -975,15 +985,15 @@ if (status) {
 
 app.get("/admin/inbox/full", requireAdmin, async (req, res) => {
   const status = req.query.status;
-const scope = req.query.scope || "handoff";
+  const scope = req.query.scope || "handoff";
 
-const q = {};
-if (scope === "handoff") {
-  q.handoffMode = true;
-}
-if (status) {
-  q.status = status;
-}
+  const q = {};
+  if (scope === "handoff") {
+    q.handoffMode = true;
+  }
+  if (status) {
+    q.status = status;
+  }
 
   const convos = await Conversation.find(q)
     .sort({ lastMessageAt: -1, updatedAt: -1 })
@@ -1133,6 +1143,9 @@ app.post("/admin/conversations/:waId/messages", requireAdmin, async (req, res) =
   res.json({ ok: true });
 });
 
+// -------------------------
+// Gemini helpers
+// -------------------------
 
 async function callGeminiForReport(transcript) {
   if (!GEMINI_API_KEY) {
@@ -1154,37 +1167,50 @@ Transcript:
 ${transcript}
   `.trim();
 
-  const response = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt }
-            ]
-          }
-        ]
-      })
-    }
-  );
+  const data = await callGeminiWithPrompt(prompt);
 
-  const data = await response.json().catch(function () { return {}; });
-
-  if (!response.ok) {
-    throw new Error(data.error?.message || "Gemini request failed");
-  }
-
-  return data;
+  return extractGeminiText(data);
 }
 
-// Generic Gemini caller — accepts a fully-formed prompt string.
-// callGeminiForReport calls this internally too (refactor optional later).
+async function callGeminiForTableReport(transcript) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY");
+  }
+
+  const prompt = `
+You are analyzing gym WhatsApp chats for the gym owner.
+
+You must return ONLY valid JSON.
+Do not wrap the JSON in markdown.
+Do not add explanation text.
+Do not add code fences.
+
+Return exactly this structure:
+{
+  "columns": ["Column 1", "Column 2", "Column 3"],
+  "rows": [
+    ["value 1", "value 2", "value 3"]
+  ]
+}
+
+Rules:
+- "columns" must be an array of strings
+- "rows" must be an array of arrays
+- every row must have the same number of items as columns
+- keep values short and business-relevant
+- focus on admin performance, lead quality, missed opportunities, objections, follow-up quality, and sales signals
+- if there is limited information, still return valid JSON with best-effort rows
+
+Transcript:
+${transcript}
+  `.trim();
+
+  const data = await callGeminiWithPrompt(prompt);
+  const rawText = extractGeminiText(data);
+
+  return parseGeminiTableJson(rawText);
+}
+
 async function callGeminiWithPrompt(prompt) {
   if (!GEMINI_API_KEY) {
     throw new Error("Missing GEMINI_API_KEY");
@@ -1213,175 +1239,188 @@ async function callGeminiWithPrompt(prompt) {
   return data;
 }
 
+function extractGeminiText(data) {
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+}
 
+function tryParseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return null;
+  }
+}
 
+function parseGeminiTableJson(rawText) {
+  if (!rawText || typeof rawText !== "string") {
+    throw new Error("Gemini returned empty table response");
+  }
+
+  let parsed = tryParseJson(rawText);
+
+  if (!parsed) {
+    const cleaned = rawText
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+
+    parsed = tryParseJson(cleaned);
+  }
+
+  if (!parsed) {
+    const firstBrace = rawText.indexOf("{");
+    const lastBrace = rawText.lastIndexOf("}");
+
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const sliced = rawText.slice(firstBrace, lastBrace + 1);
+      parsed = tryParseJson(sliced);
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Gemini did not return valid JSON object for table report");
+  }
+
+  const columns = Array.isArray(parsed.columns) ? parsed.columns : null;
+  const rows = Array.isArray(parsed.rows) ? parsed.rows : null;
+
+  if (!columns || !rows) {
+    throw new Error("Table JSON must include columns and rows arrays");
+  }
+
+  const safeColumns = columns.map(function(col) {
+    return String(col ?? "");
+  });
+
+  const expectedLength = safeColumns.length;
+
+  if (expectedLength === 0) {
+    throw new Error("Table report must include at least one column");
+  }
+
+  const safeRows = rows.map(function(row) {
+    if (!Array.isArray(row)) {
+      throw new Error("Each row must be an array");
+    }
+
+    const normalized = row.map(function(cell) {
+      return String(cell ?? "");
+    });
+
+    if (normalized.length < expectedLength) {
+      while (normalized.length < expectedLength) {
+        normalized.push("");
+      }
+    }
+
+    if (normalized.length > expectedLength) {
+      return normalized.slice(0, expectedLength);
+    }
+
+    return normalized;
+  });
+
+  return {
+    columns: safeColumns,
+    rows: safeRows
+  };
+}
+
+// -------------------------
+// Reports
+// -------------------------
 
 app.post("/admin/reports/preview", requireAdmin, async (req, res) => {
   try {
     const { contact, fromDate, toDate, scope } = req.body || {};
     let query = {};
-    // Filter by contact (waId)
-if (contact) {
-  query.waId = contact;
-}
 
-// Filter by date
-if (fromDate || toDate) {
-  query.createdAt = {};
-  if (fromDate) {
-    query.createdAt.$gte = new Date(fromDate);
-  }
-  if (toDate) {
-    query.createdAt.$lte = new Date(toDate);
-  }
-}
+    if (scope === "single" && contact) {
+      query.waId = contact;
+    } else if (contact) {
+      query.waId = contact;
+    }
 
-// Get messages from DB
-const messages = await MessageLog.find(query)
-  .sort({ createdAt: 1 })
-  .limit(10000000)
-  .lean();
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) {
+        const end = new Date(toDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
+      }
+    }
 
-// Prepare simple preview
-const transcript = messages.map(function(m) {
-  let sender = "Bot";
+    const messages = await MessageLog.find(query)
+      .sort({ createdAt: 1 })
+      .limit(10000)
+      .lean();
 
-  if (m.direction === "in") {
-    sender = "Customer";
-  } else if (m.meta && m.meta.byAdminId) {
-    sender = "Admin";
-  }
+    const transcript = messages.map(function(m) {
+      let sender = "Bot";
+      if (m.direction === "in") {
+        sender = "Customer";
+      } else if (m.meta && m.meta.byAdminId) {
+        sender = "Admin";
+      }
+      return sender + ": " + (m.text || "");
+    }).join("\n");
 
-  return sender + ": " + (m.text || "");
-}).join("\n");
-
-return res.json({
-  ok: true,
-  totalMessages: messages.length,
-  transcript: transcript
-});
-  } catch (e) {
-    return res.status(500).json({
-      ok: false,
-      error: e.message
+    return res.json({
+      ok: true,
+      totalMessages: messages.length,
+      transcript: transcript
     });
-  }
-});
-
-
-app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
-  try {
-    // Pull transcript AND reportType from the request body.
-    // reportType defaults to "descriptive" if not sent.
-    const { transcript, reportType = "descriptive" } = req.body || {};
-
-    // Guard: transcript must exist
-    if (!transcript) {
-      return res.status(400).json({ ok: false, error: "No transcript provided" });
-    }
-
-    // ── BRANCH A: descriptive (existing behaviour, unchanged) ──────────────
-    if (reportType === "descriptive") {
-      const geminiResponse = await callGeminiForReport(transcript);
-
-      let aiText = "";
-      try {
-        aiText = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      } catch (e) {
-        aiText = "";
-      }
-
-      return res.json({ ok: true, reportType: "descriptive", aiText: aiText || "No response from AI" });
-    }
-
-    // ── BRANCH B: table ────────────────────────────────────────────────────
-    if (reportType === "table") {
-
-      // Build a prompt that tells Gemini: return ONLY JSON, nothing else.
-      // We describe the exact shape we want so it has no room to freestyle.
-      const tablePrompt = `
-You are a gym business analyst. Analyze the following WhatsApp chat transcript.
-
-Return ONLY a JSON object — no explanation, no markdown, no backticks.
-The JSON must match this exact structure:
-{
-  "columns": ["Column1", "Column2", "Column3"],
-  "rows": [
-    ["value1", "value2", "value3"],
-    ["value1", "value2", "value3"]
-  ]
-}
-
-Use these exact columns:
-["Contact", "Lead Temperature", "Potential Customer?", "Admin Mistakes", "Missed Opportunities", "Suggested Follow-up"]
-
-Each row = one conversation or one contact found in the transcript.
-Fill every cell with a short phrase (max 8 words). Use "N/A" if not applicable.
-Do NOT include any text outside the JSON object.
-
-Transcript:
-${transcript}
-      `.trim();
-
-      // Call Gemini with our table prompt (reusing the same fetch pattern)
-      const rawGeminiResponse = await callGeminiWithPrompt(tablePrompt);
-
-      // Extract the raw text Gemini returned
-      let rawText = "";
-      try {
-        rawText = rawGeminiResponse.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      } catch (e) {
-        rawText = "";
-      }
-
-      // Gemini sometimes wraps JSON in ```json ... ``` fences — strip them
-      const cleaned = rawText
-        .replace(/```json/gi, "")   // remove opening fence
-        .replace(/```/g, "")        // remove closing fence
-        .trim();                     // remove leading/trailing whitespace
-
-      // Safely parse the JSON
-      let parsed = null;
-      try {
-        parsed = JSON.parse(cleaned);
-      } catch (parseErr) {
-        // If Gemini returned garbage, tell the frontend clearly
-        return res.status(422).json({
-          ok: false,
-          error: "AI returned invalid JSON. Try again or use Descriptive mode.",
-          raw: cleaned.slice(0, 500) // send first 500 chars so you can debug
-        });
-      }
-
-      // Validate the parsed object has the shape we expect
-      if (!Array.isArray(parsed.columns) || !Array.isArray(parsed.rows)) {
-        return res.status(422).json({
-          ok: false,
-          error: "AI response missing columns or rows.",
-          raw: cleaned.slice(0, 500)
-        });
-      }
-
-      // All good — return structured data
-      return res.json({
-        ok: true,
-        reportType: "table",
-        columns: parsed.columns,
-        rows: parsed.rows
-      });
-    }
-
-    // ── Unknown reportType ─────────────────────────────────────────────────
-    return res.status(400).json({ ok: false, error: "Unknown reportType: " + reportType });
-
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
 });
 
+app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
+  try {
+    const { transcript, reportType = "descriptive" } = req.body || {};
+
+    if (!transcript || !transcript.trim()) {
+      return res.status(400).json({ ok: false, error: "Transcript is required" });
+    }
+
+    if (reportType === "descriptive") {
+      const aiText = await callGeminiForReport(transcript);
+
+      return res.json({
+        ok: true,
+        reportType: "descriptive",
+        aiText: aiText || "No analysis returned."
+      });
+    }
+
+    if (reportType === "table") {
+      const tableResult = await callGeminiForTableReport(transcript);
+
+      return res.json({
+        ok: true,
+        reportType: "table",
+        columns: tableResult.columns,
+        rows: tableResult.rows
+      });
+    }
+
+    return res.status(400).json({
+      ok: false,
+      error: "Invalid reportType. Allowed: descriptive, table"
+    });
+  } catch (err) {
+    console.error("Report analysis error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message || "Failed to analyze report"
+    });
+  }
+});
 
 // -------------------------
-// Existing simple admin endpoints
+// Simple admin endpoints
 // -------------------------
 
 app.get("/admin/trials", requireAdmin, async (req, res) => {
@@ -1411,4 +1450,4 @@ app.post("/admin/trials/:id/status", requireAdmin, async (req, res) => {
   res.json({ ok: true, trial: trial });
 });
 
-app.listen(PORT, () => console.log(`✅ Server listening on port ${PORT}`));
+app.listen(PORT, () => console.log(\`✅ Server listening on port \${PORT}\`));
