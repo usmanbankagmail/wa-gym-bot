@@ -277,7 +277,6 @@ app.get("/admin/app", requireAdmin, (req, res) => {
 
   <div class="card">
     <div class="links">
-      <a href="/admin/trials" target="_blank">Trials</a>
       <a href="/admin/contacts" target="_blank">Contacts</a>
       <a href="/admin/inbox" target="_blank">Inbox</a>
       <a href="#reportsSection">Reports</a>
