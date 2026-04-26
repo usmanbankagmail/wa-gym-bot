@@ -6,24 +6,8 @@ import { sendText, sendButtons } from "./whatsapp.js";
 import { normalizeText, isGreeting, isStop, isBot, isAgent } from "../utils/text.utils.js";
 import { todayISO, tomorrowISO } from "../utils/date.utils.js";
 import { resetContext, enableHandoff, disableHandoff } from "../utils/conversation.utils.js";
+import { logInboudMessage } from "./messageLog.service.js";
 
-async function logInboudMessage({ waId, text, interactive }) {
-  const inboundText =
-    text ||
-    interactive?.button_reply?.title ||
-    interactive?.list_reply?.title ||
-    "";
-
-  await MessageLog.create({
-    waId,
-    direction: "in",
-    type: interactive ? "interactive" : "text",
-    text: inboundText,
-    meta: interactive || {}
-  });
-
-  return inboundText;
-}
 
 async function upsertInboundContact({ waId, phoneE164 }) {
   const contact = await Contact.findOneAndUpdate(
