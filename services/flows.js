@@ -5,33 +5,8 @@ import MessageLog from "../models/MessageLog.js";
 import { sendText, sendButtons } from "./whatsapp.js";
 import { normalizeText, isGreeting, isStop, isBot, isAgent } from "../utils/text.utils.js";
 import { todayISO, tomorrowISO } from "../utils/date.utils.js";
+import { resetContext, enableHandoff, disableHandoff } from "../utils/conversation.utils.js";
 
-
-function resetContext(convo) {
-  convo.context = {
-    goal: "",
-    trialName: "",
-    trialDay: "",
-    trialTimeSlot: ""
-  };
-}
-
-async function enableHandoff(convo) {
-  convo.handoffMode = true;
-  convo.state = "HUMAN";
-  convo.status = "open";
-  convo.assignedTo = null;
-  convo.assignedAt = null;
-}
-
-async function disableHandoff(convo) {
-  convo.handoffMode = false;
-  convo.state = "IDLE";
-  convo.status = "closed";
-  convo.assignedTo = null;
-  convo.assignedAt = null;
-  resetContext(convo);
-}
 
 export async function handleInbound({ waId, phoneE164, text, interactive }) {
   const inboundText =
