@@ -10,8 +10,6 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-
-import Trial from "./models/Trial.js";
 import Conversation from "./models/Conversation.js";
 import Contact from "./models/Contact.js";
 import MessageLog from "./models/MessageLog.js";
