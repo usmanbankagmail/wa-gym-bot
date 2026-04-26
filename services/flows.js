@@ -3,6 +3,7 @@ import Conversation from "../models/Conversation.js";
 import Trial from "../models/Trial.js";
 import MessageLog from "../models/MessageLog.js";
 import { sendText, sendButtons } from "./whatsapp.js";
+import { normalizeText } from "../utils/text.utils.js";
 
 function todayISO() {
   const d = new Date();
@@ -19,10 +20,6 @@ function tomorrowISO() {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
-}
-
-function normalizeText(s = "") {
-  return s.trim().toLowerCase();
 }
 
 function isGreeting(text) {
