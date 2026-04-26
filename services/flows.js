@@ -7,8 +7,7 @@ import { normalizeText, isGreeting, isStop, isBot, isAgent } from "../utils/text
 import { todayISO, tomorrowISO } from "../utils/date.utils.js";
 import { resetContext, enableHandoff, disableHandoff } from "../utils/conversation.utils.js";
 
-
-export async function handleInbound({ waId, phoneE164, text, interactive }) {
+async function logInboudMessage({ waId, text, interactive }) {
   const inboundText =
     text ||
     interactive?.button_reply?.title ||
@@ -23,6 +22,10 @@ export async function handleInbound({ waId, phoneE164, text, interactive }) {
     meta: interactive || {}
   });
 
+  return inboundText;
+}
+
+async function upsertInboundContact({ waId, phoneE164 }) {
   const contact = await Contact.findOneAndUpdate(
     { waId },
     {
@@ -31,11 +34,24 @@ export async function handleInbound({ waId, phoneE164, text, interactive }) {
       lastInboundAt: new Date(),
       lastThreadAt: new Date()
     },
-    { upsert: true, new: true }
+    { upsert: true, new:true }
   );
 
-  let convo = await Conversation.findOne({ waId });
-  if (!convo) convo = await Conversation.create({ waId });
+  return contact;
+}
+
+async function getOrCreateConversation(waID) {
+  let convo = await Conversation.findOne( {waId} );
+  if(!convo) {
+    convo = await Conversation.create( {waID} );
+  }
+  return convo;
+}
+
+export async function handleInbound({ waId, phoneE164, text, interactive }) {
+  await logInboudMessage({ waId, text, interactive });
+  const contact = await upsertInboundContact({ waId, phoneE164 });
+  const convo = await getOrCreateConversation(waId);
 
   if (isStop(text || "")) {
     await Contact.updateOne({ waId }, { unsubscribed: true, optIn: false });
@@ -222,10 +238,10 @@ async function handlePricingGoal({ waId, convo, buttonId, incomingText }) {
     buttonId === "GOAL_WEIGHT_LOSS"
       ? "weight_loss"
       : buttonId === "GOAL_MUSCLE"
-      ? "muscle_gain"
-      : buttonId === "GOAL_GENERAL"
-      ? "general"
-      : "";
+        ? "muscle_gain"
+        : buttonId === "GOAL_GENERAL"
+          ? "general"
+          : "";
 
   if (!goal) {
     await sendText(waId, "Please button select karein (Weight Loss / Muscle Gain / General Fitness).");
@@ -240,8 +256,8 @@ async function handlePricingGoal({ waId, convo, buttonId, incomingText }) {
     goal === "weight_loss"
       ? "✅ Weight loss ke liye best option: Monthly Membership.\n\nKya aap *free trial* book karna chahte hain?"
       : goal === "muscle_gain"
-      ? "💪 Muscle gain ke liye: Monthly Membership (consistent training).\n\nFree trial book kar dein?"
-      : "🏋️ General fitness ke liye: Monthly Membership.\n\nFree trial book kar dein?";
+        ? "💪 Muscle gain ke liye: Monthly Membership (consistent training).\n\nFree trial book kar dein?"
+        : "🏋️ General fitness ke liye: Monthly Membership.\n\nFree trial book kar dein?";
 
   await sendButtons(waId, msg, [
     { id: "TRIAL", title: "🆓 Book Free Trial" },
