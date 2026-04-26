@@ -1,4 +1,4 @@
-import Contact from "../models/Contact";
+import Contact from "../models/Contact.js";
 
 export async function upsertInboundContact({ waId, phoneE164 }) {
   const contact = await Contact.findOneAndUpdate(

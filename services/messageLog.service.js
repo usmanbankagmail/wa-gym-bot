@@ -1,4 +1,4 @@
-import MessageLog from "../models/MessageLog";
+import MessageLog from "../models/MessageLog.js";
 
 export async function logInboudMessage({ waId, text, interactive }) {
     const inboundText =
