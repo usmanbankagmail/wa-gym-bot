@@ -1,5 +1,4 @@
 import Contact from "../models/Contact.js";
-import Conversation from "../models/Conversation.js";
 import Trial from "../models/Trial.js";
 import MessageLog from "../models/MessageLog.js";
 import { sendText, sendButtons } from "./whatsapp.js";
@@ -7,30 +6,8 @@ import { normalizeText, isGreeting, isStop, isBot, isAgent } from "../utils/text
 import { todayISO, tomorrowISO } from "../utils/date.utils.js";
 import { resetContext, enableHandoff, disableHandoff } from "../utils/conversation.utils.js";
 import { logInboudMessage } from "./messageLog.service.js";
-
-
-async function upsertInboundContact({ waId, phoneE164 }) {
-  const contact = await Contact.findOneAndUpdate(
-    { waId },
-    {
-      waId,
-      phoneE164,
-      lastInboundAt: new Date(),
-      lastThreadAt: new Date()
-    },
-    { upsert: true, new:true }
-  );
-
-  return contact;
-}
-
-async function getOrCreateConversation(waID) {
-  let convo = await Conversation.findOne( {waId} );
-  if(!convo) {
-    convo = await Conversation.create( {waID} );
-  }
-  return convo;
-}
+import { upsertInboundContact } from "./contact.service.js";
+import { getOrCreateConversation } from "./conversation.service.js";
 
 export async function handleInbound({ waId, phoneE164, text, interactive }) {
   await logInboudMessage({ waId, text, interactive });
