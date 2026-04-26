@@ -3,7 +3,7 @@ import Conversation from "../models/Conversation.js";
 import Trial from "../models/Trial.js";
 import MessageLog from "../models/MessageLog.js";
 import { sendText, sendButtons } from "./whatsapp.js";
-import { normalizeText } from "../utils/text.utils.js";
+import { normalizeText, isGreeting, isStop, isBot, isAgent } from "../utils/text.utils.js";
 
 function todayISO() {
   const d = new Date();
@@ -22,25 +22,6 @@ function tomorrowISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function isGreeting(text) {
-  const t = normalizeText(text);
-  return ["hi", "hello", "hey", "aoa", "assalam o alaikum", "menu"].includes(t);
-}
-
-function isStop(text) {
-  const t = normalizeText(text);
-  return ["stop", "unsubscribe", "cancel"].includes(t);
-}
-
-function isBot(text) {
-  const t = normalizeText(text);
-  return ["bot", "menu", "start"].includes(t);
-}
-
-function isAgent(text) {
-  const t = normalizeText(text);
-  return ["agent", "human", "representative", "rep"].includes(t);
-}
 
 function resetContext(convo) {
   convo.context = {
