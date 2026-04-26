@@ -1422,10 +1422,7 @@ app.post("/admin/reports/analyze", requireAdmin, async (req, res) => {
 // Simple admin endpoints
 // -------------------------
 
-app.get("/admin/trials", requireAdmin, async (req, res) => {
-  const trials = await Trial.find({}).sort({ createdAt: -1 }).limit(200).lean();
-  res.json(trials);
-});
+
 
 app.get("/admin/contacts", requireAdmin, async (req, res) => {
   const contacts = await Contact.find({}).sort({ updatedAt: -1 }).limit(200).lean();
